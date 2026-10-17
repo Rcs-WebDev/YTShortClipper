@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>YTShortClipper Studio — AI Short Clipper & Video Studio</title>
-  <meta name="description" content="Live Interactive Web Studio YTShortClipper: Potong video panjang jadi YouTube Shorts, TikTok & Reels dengan subtitle kata-demi-kata dinamis & On-Device AI.">
+  <title>YTShortClipper — AI-Powered YouTube Short Clipper & Video Studio</title>
+  <meta name="description" content="Aplikasi pembuat video YouTube Shorts, TikTok, dan Reels otomatis bertenaga AI dengan Homepage, Review Klip, dan Pre-Render Studio Editor lengkap.">
   
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -14,7 +14,7 @@
   <style>
     :root {
       --bg: #090D16;
-      --panel-bg: rgba(15, 23, 42, 0.85);
+      --panel-bg: rgba(15, 23, 42, 0.9);
       --card-bg: rgba(30, 41, 59, 0.6);
       --card-border: rgba(255, 255, 255, 0.08);
       --primary: #FF4500;
@@ -31,7 +31,6 @@
       box-sizing: border-box;
       margin: 0;
       padding: 0;
-      user-select: none;
     }
 
     body {
@@ -50,7 +49,7 @@
       background-attachment: fixed;
     }
 
-    /* Top Studio Header */
+    /* Header Nav */
     header {
       background: rgba(15, 23, 42, 0.95);
       border-bottom: 1px solid var(--card-border);
@@ -68,7 +67,8 @@
     .brand-wrap {
       display: flex;
       align-items: center;
-      gap: 14px;
+      gap: 12px;
+      cursor: pointer;
     }
 
     .logo-badge {
@@ -78,7 +78,6 @@
       font-family: 'Space Grotesk', sans-serif;
       font-weight: 800;
       font-size: 14px;
-      letter-spacing: 0.5px;
       color: white;
       box-shadow: 0 4px 14px rgba(255, 69, 0, 0.4);
     }
@@ -107,12 +106,14 @@
       background: rgba(255, 255, 255, 0.05);
       border: 1px solid var(--card-border);
       color: var(--text);
-      width: 38px;
-      height: 38px;
+      padding: 8px 14px;
       border-radius: 10px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 600;
       cursor: pointer;
       transition: all 0.2s;
     }
@@ -120,11 +121,6 @@
     .icon-btn:hover {
       background: rgba(255, 255, 255, 0.12);
       border-color: rgba(255, 255, 255, 0.2);
-    }
-
-    .icon-btn:disabled {
-      opacity: 0.4;
-      cursor: not-allowed;
     }
 
     .apk-download-btn {
@@ -147,9 +143,388 @@
       box-shadow: 0 6px 22px rgba(255, 69, 0, 0.5);
     }
 
-    /* Main Studio Workspace */
-    .studio-container {
+    /* Screen Views Management */
+    .app-screen {
+      display: none;
+      width: 100%;
       flex: 1;
+      animation: fadeIn 0.25s ease;
+    }
+
+    .app-screen.active {
+      display: flex;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ==========================================================
+       SCREEN 1: HOMEPAGE (BERANDA)
+       ========================================================== */
+    .home-wrapper {
+      max-width: 860px;
+      margin: 32px auto 60px;
+      padding: 0 20px;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    /* Hero Banner */
+    .hero-banner {
+      background: linear-gradient(135deg, rgba(255, 69, 0, 0.18), rgba(99, 102, 241, 0.22));
+      border: 1px solid rgba(255, 69, 0, 0.35);
+      border-radius: 24px;
+      padding: 28px 24px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .hero-banner h2 {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 24px;
+      font-weight: 800;
+      margin-bottom: 6px;
+    }
+
+    .hero-banner p {
+      font-size: 14px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    .badge-chip {
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      color: #FF8A65;
+      display: inline-block;
+      margin-bottom: 8px;
+    }
+
+    /* Section Card */
+    .config-card {
+      background: var(--panel-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 20px;
+      padding: 24px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    }
+
+    .card-header-title {
+      font-size: 16px;
+      font-weight: 800;
+      color: white;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    /* Segmented Tab Buttons */
+    .segmented-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .seg-button {
+      background: rgba(30, 41, 59, 0.5);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: 16px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      transition: all 0.2s;
+    }
+
+    .seg-button:hover {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: rgba(255, 69, 0, 0.3);
+    }
+
+    .seg-button.active {
+      border: 2px solid var(--primary);
+      background: rgba(255, 69, 0, 0.12);
+    }
+
+    .seg-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.05);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+    }
+
+    .seg-button.active .seg-icon {
+      background: var(--primary);
+      color: white;
+    }
+
+    .seg-info h4 {
+      font-size: 15px;
+      font-weight: 700;
+      color: white;
+    }
+
+    .seg-info p {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    /* YouTube Input Box */
+    .input-box-wrapper {
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .url-input-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    .text-field {
+      flex: 1;
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid var(--card-border);
+      color: white;
+      padding: 12px 16px;
+      border-radius: 10px;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .text-field:focus {
+      border-color: var(--primary);
+    }
+
+    .btn-action {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid var(--card-border);
+      color: white;
+      padding: 0 16px;
+      border-radius: 10px;
+      font-weight: 700;
+      font-size: 13px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn-action:hover {
+      background: rgba(255, 255, 255, 0.15);
+    }
+
+    /* Video Metadata Card Preview */
+    .video-preview-meta {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 12px;
+      margin-top: 6px;
+    }
+
+    .thumb-img {
+      width: 120px;
+      aspect-ratio: 16 / 9;
+      object-fit: cover;
+      border-radius: 8px;
+    }
+
+    .meta-details h4 {
+      font-size: 14px;
+      font-weight: 700;
+      color: white;
+      margin-bottom: 4px;
+    }
+
+    .meta-details p {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* Clip Count Slider Section */
+    .slider-box {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .slider-header-flex {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .slider-track {
+      width: 100%;
+      height: 6px;
+      accent-color: var(--primary);
+      cursor: pointer;
+    }
+
+    /* Manual Request Rows */
+    .manual-row-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .manual-row-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: rgba(15, 23, 42, 0.5);
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      padding: 10px 14px;
+    }
+
+    /* Big Submit Button */
+    .start-clipper-btn {
+      background: linear-gradient(135deg, #FF4500, #E11D48);
+      color: white;
+      border: none;
+      border-radius: 16px;
+      padding: 18px;
+      font-size: 17px;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      box-shadow: 0 10px 30px rgba(255, 69, 0, 0.4);
+      transition: all 0.25s;
+    }
+
+    .start-clipper-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 14px 38px rgba(255, 69, 0, 0.6);
+    }
+
+    /* ==========================================================
+       SCREEN 2: REVIEW / SELEKSI KLIP (REVIEW SCREEN)
+       ========================================================== */
+    .review-wrapper {
+      max-width: 920px;
+      margin: 32px auto 60px;
+      padding: 0 20px;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .review-header-card {
+      background: var(--panel-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 20px;
+      padding: 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .review-list {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .clip-card {
+      background: var(--panel-bg);
+      border: 2px solid var(--card-border);
+      border-radius: 18px;
+      padding: 20px;
+      display: grid;
+      grid-template-columns: 36px 1fr 140px;
+      gap: 18px;
+      align-items: center;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .clip-card:hover {
+      border-color: rgba(255, 69, 0, 0.4);
+      transform: translateY(-2px);
+    }
+
+    .clip-card.selected {
+      border-color: var(--primary);
+      background: rgba(255, 69, 0, 0.08);
+    }
+
+    .clip-checkbox {
+      width: 22px;
+      height: 22px;
+      accent-color: var(--primary);
+      cursor: pointer;
+    }
+
+    .clip-badge-score {
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      color: #34D399;
+      font-weight: 800;
+      font-size: 12px;
+      padding: 4px 10px;
+      border-radius: 8px;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      margin-bottom: 6px;
+    }
+
+    .clip-hook-tag {
+      background: #E11D48;
+      color: white;
+      font-weight: 800;
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      display: inline-block;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+
+    /* ==========================================================
+       SCREEN 3: STUDIO EDITOR (STUDIO SCREEN)
+       ========================================================== */
+    .studio-container {
       display: grid;
       grid-template-columns: 460px 1fr;
       gap: 20px;
@@ -159,7 +534,6 @@
       width: 100%;
     }
 
-    /* Left: Live Preview Canvas */
     .preview-column {
       display: flex;
       flex-direction: column;
@@ -199,7 +573,6 @@
       justify-content: center;
     }
 
-    /* Video Player Element */
     .canvas-video {
       width: 100%;
       height: 100%;
@@ -212,7 +585,6 @@
       transform: scale(1.18);
     }
 
-    /* Top Hook Headline Banner */
     .hook-banner {
       position: absolute;
       top: 36px;
@@ -221,7 +593,7 @@
       background: #E11D48;
       color: white;
       font-weight: 900;
-      font-size: 14px;
+      font-size: 13px;
       text-transform: uppercase;
       text-align: center;
       padding: 8px 12px;
@@ -232,7 +604,6 @@
       transition: all 0.25s;
     }
 
-    /* Live Subtitle Overlay */
     .subtitle-overlay-box {
       position: absolute;
       left: 18px;
@@ -261,7 +632,6 @@
       font-weight: 900;
     }
 
-    /* Watermark Badge */
     .watermark-badge {
       position: absolute;
       bottom: 24px;
@@ -274,7 +644,6 @@
       text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
     }
 
-    /* Player Controls Bar */
     .player-controls {
       background: var(--panel-bg);
       border: 1px solid var(--card-border);
@@ -296,13 +665,6 @@
       font-size: 12px;
       color: var(--text-muted);
       min-width: 42px;
-    }
-
-    .slider-track {
-      flex: 1;
-      accent-color: var(--primary);
-      height: 6px;
-      cursor: pointer;
     }
 
     .ctrl-buttons {
@@ -337,7 +699,6 @@
       background: var(--primary-hover);
     }
 
-    /* Right: Studio Tools Panel */
     .tools-column {
       background: var(--panel-bg);
       border: 1px solid var(--card-border);
@@ -349,7 +710,6 @@
       min-height: 640px;
     }
 
-    /* Tab Navigation */
     .tab-bar {
       display: flex;
       background: rgba(9, 13, 22, 0.6);
@@ -386,7 +746,6 @@
       border: 1px solid rgba(255, 69, 0, 0.25);
     }
 
-    /* Tab Panes */
     .tab-content {
       flex: 1;
       padding: 24px;
@@ -397,37 +756,12 @@
       display: none;
       flex-direction: column;
       gap: 20px;
-      animation: fadeIn 0.2s ease;
     }
 
     .tab-pane.active {
       display: flex;
     }
 
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(4px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-
-    /* Cards & Controls inside Tabs */
-    .section-card {
-      background: var(--card-bg);
-      border: 1px solid var(--card-border);
-      border-radius: 16px;
-      padding: 18px;
-    }
-
-    .card-title {
-      font-size: 14px;
-      font-weight: 700;
-      color: white;
-      margin-bottom: 14px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-
-    /* Font Presets Grid */
     .preset-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
@@ -467,27 +801,6 @@
       font-weight: 600;
     }
 
-    /* Slider Row */
-    .slider-row {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      margin-bottom: 14px;
-    }
-
-    .slider-header {
-      display: flex;
-      justify-content: space-between;
-      font-size: 13px;
-      color: var(--text-muted);
-    }
-
-    .slider-value {
-      color: white;
-      font-weight: 700;
-    }
-
-    /* Color Swatches */
     .color-swatches {
       display: flex;
       gap: 10px;
@@ -503,161 +816,17 @@
       transition: transform 0.15s;
     }
 
-    .color-dot:hover {
-      transform: scale(1.15);
-    }
-
     .color-dot.active {
       border-color: white;
       box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
-    }
-
-    /* Caption Generator Banner */
-    .generator-banner {
-      background: linear-gradient(135deg, rgba(255, 69, 0, 0.15), rgba(99, 102, 241, 0.15));
-      border: 1px solid rgba(255, 69, 0, 0.3);
-      border-radius: 16px;
-      padding: 18px;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-
-    .gen-btn {
-      background: var(--primary);
-      color: white;
-      border: none;
-      padding: 12px;
-      border-radius: 10px;
-      font-weight: 700;
-      font-size: 14px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      transition: all 0.2s;
-    }
-
-    .gen-btn:hover {
-      background: var(--primary-hover);
-      box-shadow: 0 4px 16px rgba(255, 69, 0, 0.4);
-    }
-
-    /* Subtitle Line Rows */
-    .subs-list {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      max-height: 280px;
-      overflow-y: auto;
-    }
-
-    .sub-item {
-      background: rgba(15, 23, 42, 0.6);
-      border: 1px solid var(--card-border);
-      border-radius: 10px;
-      padding: 12px 14px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      cursor: pointer;
-      transition: all 0.15s;
-    }
-
-    .sub-item:hover, .sub-item.active {
-      border-color: rgba(255, 69, 0, 0.4);
-      background: rgba(255, 69, 0, 0.08);
-    }
-
-    .sub-time {
-      font-family: monospace;
-      font-size: 11px;
-      color: var(--primary);
-      font-weight: 700;
-    }
-
-    .sub-text-preview {
-      font-size: 13px;
-      font-weight: 600;
-      color: white;
-      margin-top: 2px;
-    }
-
-    /* Switch toggle */
-    .toggle-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 10px 0;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-    }
-
-    .toggle-row:last-child {
-      border-bottom: none;
-    }
-
-    .toggle-label {
-      font-size: 13px;
-      font-weight: 600;
-      color: white;
-    }
-
-    .toggle-desc {
-      font-size: 11px;
-      color: var(--text-muted);
-    }
-
-    .switch {
-      position: relative;
-      display: inline-block;
-      width: 44px;
-      height: 24px;
-    }
-
-    .switch input {
-      opacity: 0;
-      width: 0;
-      height: 0;
-    }
-
-    .slider-switch {
-      position: absolute;
-      cursor: pointer;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background-color: rgba(255, 255, 255, 0.1);
-      transition: .25s;
-      border-radius: 24px;
-      border: 1px solid var(--card-border);
-    }
-
-    .slider-switch:before {
-      position: absolute;
-      content: "";
-      height: 18px;
-      width: 18px;
-      left: 2px;
-      bottom: 2px;
-      background-color: white;
-      transition: .25s;
-      border-radius: 50%;
-    }
-
-    input:checked + .slider-switch {
-      background-color: var(--primary);
-      border-color: var(--primary);
-    }
-
-    input:checked + .slider-switch:before {
-      transform: translateX(20px);
     }
 
     /* Modal Progress Simulation */
     .modal-overlay {
       position: fixed;
       top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(0, 0, 0, 0.75);
-      backdrop-filter: blur(8px);
+      background: rgba(0, 0, 0, 0.8);
+      backdrop-filter: blur(10px);
       display: none;
       align-items: center;
       justify-content: center;
@@ -674,14 +843,14 @@
       border-radius: 20px;
       padding: 32px 28px;
       width: 90%;
-      max-width: 420px;
+      max-width: 440px;
       text-align: center;
-      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.9);
     }
 
     .spinner {
-      width: 48px;
-      height: 48px;
+      width: 50px;
+      height: 50px;
       border: 4px solid rgba(255, 69, 0, 0.2);
       border-top-color: var(--primary);
       border-radius: 50%;
@@ -703,373 +872,473 @@
         margin: 0 auto;
         width: 100%;
       }
+      .clip-card {
+        grid-template-columns: 32px 1fr;
+      }
     }
   </style>
 </head>
 <body>
 
-  <!-- Top Studio Navigation Bar -->
+  <!-- Top Studio Header -->
   <header>
-    <div class="brand-wrap">
+    <div class="brand-wrap" onclick="navigateTo('homeScreen')">
       <span class="logo-badge">⚡ YT</span>
       <div class="title-group">
-        <h1>YTShortClipper Studio Pro <span style="font-size: 11px; background: rgba(99,102,241,0.2); color:#A5B4FC; padding: 2px 8px; border-radius: 6px;">Web Live Edition</span></h1>
-        <p>Interactive Video Editor • On-Device AI Caption & Multi-Track Studio</p>
+        <h1>YTShortClipper AI <span style="font-size: 11px; background: rgba(99,102,241,0.2); color:#A5B4FC; padding: 2px 8px; border-radius: 6px;">v1.0.7</span></h1>
+        <p id="headerSubtitle">Beranda Pemotong Video AI Otomatis</p>
       </div>
     </div>
 
     <div class="header-actions">
-      <!-- Undo / Redo -->
-      <button class="icon-btn" id="btnUndo" title="Undo" onclick="undoAction()">
-        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 10h10a5 5 0 0 1 5 5v2m-15-7l4-4m-4 4l4 4"/></svg>
-      </button>
-      <button class="icon-btn" id="btnRedo" title="Redo" onclick="redoAction()">
-        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 10H11a5 5 0 0 0-5 5v2m15-7l-4-4m4 4l-4 4"/></svg>
+      <!-- Back to Home Button (Visible in Editor) -->
+      <button class="icon-btn" id="btnBackHome" style="display: none;" onclick="navigateTo('homeScreen')">
+        ← Kembali ke Beranda
       </button>
 
       <!-- Download APK Button -->
       <a href="https://github.com/Rcs-WebDev/YTShortClipper/releases" class="apk-download-btn" target="_blank" rel="noopener">
         <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-        Pasang di HP (Download APK v1.0.7)
+        Pasang APK di HP
       </a>
     </div>
   </header>
 
-  <!-- Studio Workspace -->
-  <main class="studio-container">
-
-    <!-- Left Column: 9:16 Shorts Canvas Preview -->
-    <div class="preview-column">
-      <div class="phone-mockup-wrapper">
-        <div class="phone-notch"></div>
-        <div class="canvas-viewport" id="viewport">
-          
-          <!-- Sample Video Element -->
-          <video id="videoPlayer" class="canvas-video" playsinline loop muted>
-            <!-- High quality royalty-free vertical talking-head video -->
-            <source src="https://assets.mixkit.co/videos/preview/mixkit-young-man-talking-to-camera-in-a-video-call-41132-large.mp4" type="video/mp4">
-          </video>
-
-          <!-- Hook Headline Banner -->
-          <div class="hook-banner" id="hookBanner">JANGAN SKIP! RAHASIA PENTING 🔥</div>
-
-          <!-- Live Dynamic Subtitle Overlay -->
-          <div class="subtitle-overlay-box" id="subtitleBox" style="bottom: 70px;">
-            <div class="subtitle-text" id="subtitleText">
-              <span class="word-token">RAHASIA</span>
-              <span class="word-token active">SUKSES</span>
-              <span class="word-token">YOUTUBE</span>
-              <span class="word-token">SHORTS</span>
-            </div>
-          </div>
-
-          <!-- Dynamic Watermark -->
-          <div class="watermark-badge" id="watermarkBadge">@channelmu</div>
-        </div>
-      </div>
-
-      <!-- Player Controls -->
-      <div class="player-controls">
-        <div class="scrubber-wrap">
-          <span class="time-label" id="curTime">00:00</span>
-          <input type="range" class="slider-track" id="videoScrubber" min="0" max="15" step="0.1" value="0" oninput="seekVideo(this.value)">
-          <span class="time-label" id="totTime">00:15</span>
-        </div>
-
-        <div class="ctrl-buttons">
-          <div class="ctrl-group-left">
-            <button class="play-btn" id="playBtn" onclick="togglePlay()">
-              <svg id="playIcon" width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-            </button>
-            <button class="icon-btn" onclick="restartVideo()" title="Putar Ulang">
-              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-            </button>
-            <button class="icon-btn" id="muteBtn" onclick="toggleAudio()" title="Suara Video">
-              <svg id="volIcon" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/></svg>
-            </button>
-          </div>
-
-          <div style="font-size: 12px; color: var(--text-muted); font-weight: 600;">
-            Format: <span style="color: white;">9:16 Shorts</span>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Right Column: Interactive Studio Tools -->
-    <div class="tools-column">
+  <!-- ================================================================
+       SCREEN 1: HOMEPAGE (BERANDA)
+       ================================================================ -->
+  <section class="app-screen active" id="homeScreen">
+    <div class="home-wrapper">
       
-      <!-- Tab Bar -->
-      <div class="tab-bar">
-        <div class="tab-item active" onclick="switchTab('styleTab', this)">
-          🎨 Gaya Subtitle
+      <!-- Hero Banner -->
+      <div class="hero-banner">
+        <div>
+          <span class="badge-chip">🚀 On-Device Neural Speech Engine</span>
+          <h2>Potong Video Panjang Jadi Shorts Viral</h2>
+          <p>Otomatis mencari momen dengan retensi audiens tertinggi lengkap dengan subtitle kata-demi-kata dinamis (100% Offline Tanpa Token).</p>
         </div>
-        <div class="tab-item" onclick="switchTab('captionsTab', this)">
-          💬 Captions
+        <div style="font-size: 48px;">🎬</div>
+      </div>
+
+      <!-- 1. Pilihan Sumber Video -->
+      <div class="config-card">
+        <div class="card-header-title">
+          <span>1. Pilih Sumber Video</span>
         </div>
-        <div class="tab-item" onclick="switchTab('aiToolsTab', this)">
-          ⚡ AI Tools
+
+        <div class="segmented-grid">
+          <div class="seg-button active" id="btnSrcYt" onclick="setVideoSource('youtube')">
+            <div class="seg-icon">▶️</div>
+            <div class="seg-info">
+              <h4>Link YouTube</h4>
+              <p>Ambil dari link YouTube publik</p>
+            </div>
+          </div>
+
+          <div class="seg-button" id="btnSrcGallery" onclick="setVideoSource('gallery')">
+            <div class="seg-icon">📁</div>
+            <div class="seg-info">
+              <h4>Galeri HP / File</h4>
+              <p>Upload video dari penyimpanan</p>
+            </div>
+          </div>
         </div>
-        <div class="tab-item" onclick="switchTab('komposisiTab', this)">
-          📐 Komposisi
+
+        <!-- YouTube URL Input Container -->
+        <div class="input-box-wrapper" id="ytInputBox">
+          <div class="url-input-row">
+            <input type="text" class="text-field" id="ytUrlInput" value="https://www.youtube.com/watch?v=dQw4w9WgXcQ" placeholder="Tempel link video YouTube disini...">
+            <button class="btn-action" onclick="pasteSampleUrl()">Contoh Link</button>
+          </div>
+
+          <!-- Video Metadata Card Preview -->
+          <div class="video-preview-meta">
+            <img class="thumb-img" id="ytThumbnail" src="https://images.unsplash.com/photo-1516251193007-45ef944ab0c6?w=400" alt="Video Thumbnail">
+            <div class="meta-details">
+              <h4 id="ytVideoTitle">Rahasia Sukses Channel YouTube Shorts (Podcast Highlight)</h4>
+              <p>Channel: <span style="color: white;">Creator Studio Indonesia</span> • Durasi: <strong>14:20</strong></p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Gallery Upload Container -->
+        <div class="input-box-wrapper" id="galleryInputBox" style="display: none; text-align: center; padding: 32px;">
+          <div style="font-size: 36px; margin-bottom: 10px;">📤</div>
+          <h4 style="font-size: 15px; font-weight: 700; color: white;">Pilih File Video dari Galeri HP Anda</h4>
+          <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px;">Format MP4, MOV, atau MKV hingga 1080p</p>
+          <button class="icon-btn" style="margin: 0 auto; background: var(--primary); color: white; border: none;" onclick="selectSampleGalleryVideo()">
+            Pilih Video Sampel Galeri
+          </button>
         </div>
       </div>
 
-      <!-- Tab Content Area -->
-      <div class="tab-content">
-        
-        <!-- ================= TAB 1: STYLE ================= -->
-        <div class="tab-pane active" id="styleTab">
-          
-          <!-- Preset Kartu Gaya Subtitle -->
-          <div class="section-card">
-            <div class="card-title">Preset Gaya Subtitle Populer</div>
-            <div class="preset-grid">
-              
-              <!-- BEAST Preset -->
-              <div class="preset-btn active" onclick="applyPreset('beast', this)">
-                <div class="preset-preview-text" style="font-family: 'Anton'; color: #FFF; -webkit-text-stroke: 1.5px #000; text-shadow: 2px 2px 0 #000; background: #FFD600; color: #000; padding: 2px 6px; border-radius: 4px;">BEAST</div>
-                <div class="preset-label">Trending #1</div>
-              </div>
+      <!-- 2. Pilihan Metode Klip -->
+      <div class="config-card">
+        <div class="card-header-title">
+          <span>2. Pilih Metode Klip</span>
+        </div>
 
-              <!-- Retro Neon Preset -->
-              <div class="preset-btn" onclick="applyPreset('retro', this)">
-                <div class="preset-preview-text" style="font-family: 'Bebas Neue'; color: #00FFCC; text-shadow: 0 0 10px #00FFCC;">RETRO</div>
-                <div class="preset-label">Neon Cyber</div>
-              </div>
-
-              <!-- Bold Impact Preset -->
-              <div class="preset-btn" onclick="applyPreset('bold', this)">
-                <div class="preset-preview-text" style="font-family: 'Montserrat'; color: #FFFFFF; -webkit-text-stroke: 1.8px #000;">IMPACT</div>
-                <div class="preset-label">Bold Clean</div>
-              </div>
-
-              <!-- Minimal Preset -->
-              <div class="preset-btn" onclick="applyPreset('minimal', this)">
-                <div class="preset-preview-text" style="font-family: 'Poppins'; color: #FFE600; font-weight: 800;">CLEAN</div>
-                <div class="preset-label">Podcast Minimal</div>
-              </div>
+        <div class="segmented-grid">
+          <div class="seg-button active" id="btnModeAuto" onclick="setClipMethod('auto')">
+            <div class="seg-icon">⚡</div>
+            <div class="seg-info">
+              <h4>Auto Klip AI</h4>
+              <p>AI deteksi momen viral otomatis</p>
             </div>
           </div>
 
-          <!-- Typography & Font Family -->
-          <div class="section-card">
-            <div class="card-title">Kustomisasi Font & Ukuran</div>
-            
-            <div class="slider-row">
-              <div class="slider-header">
-                <span>Jenis Font (Google Fonts)</span>
-              </div>
-              <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;">
-                <button class="icon-btn" style="width: auto; font-family: 'Anton'; font-size: 15px;" onclick="setFontFamily('Anton')">Anton</button>
-                <button class="icon-btn" style="width: auto; font-family: 'Bebas Neue'; font-size: 16px;" onclick="setFontFamily('Bebas Neue')">Bebas</button>
-                <button class="icon-btn" style="width: auto; font-family: 'Montserrat'; font-size: 13px;" onclick="setFontFamily('Montserrat')">Monts</button>
-                <button class="icon-btn" style="width: auto; font-family: 'Poppins'; font-size: 13px;" onclick="setFontFamily('Poppins')">Poppins</button>
-              </div>
-            </div>
-
-            <!-- Ukuran Font (Rentang dari 5px sesuai request pengguna) -->
-            <div class="slider-row" style="margin-top: 14px;">
-              <div class="slider-header">
-                <span>Ukuran Font Subtitle (Bisa dari 5px)</span>
-                <span class="slider-value" id="fontSizeVal">24px</span>
-              </div>
-              <input type="range" class="slider-track" min="5" max="48" value="24" oninput="setFontSize(this.value)">
-            </div>
-
-            <!-- Posisi Subtitle -->
-            <div class="slider-row">
-              <div class="slider-header">
-                <span>Posisi Letak Subtitle</span>
-                <span class="slider-value" id="subPosVal">Bawah</span>
-              </div>
-              <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
-                <button class="icon-btn" style="width: auto;" onclick="setSubPosition('atas')">Atas</button>
-                <button class="icon-btn" style="width: auto;" onclick="setSubPosition('tengah')">Tengah</button>
-                <button class="icon-btn" style="width: auto; border-color: var(--primary); color: var(--primary);" onclick="setSubPosition('bawah')">Bawah</button>
-              </div>
-            </div>
-          </div>
-
-          <!-- Color Customizer -->
-          <div class="section-card">
-            <div class="card-title">Warna Highlight Kata Aktif</div>
-            <div class="color-swatches">
-              <div class="color-dot active" style="background: #FFE600;" onclick="setActiveWordColor('#FFE600', this)"></div>
-              <div class="color-dot" style="background: #00FFCC;" onclick="setActiveWordColor('#00FFCC', this)"></div>
-              <div class="color-dot" style="background: #FF2E54;" onclick="setActiveWordColor('#FF2E54', this)"></div>
-              <div class="color-dot" style="background: #00E676;" onclick="setActiveWordColor('#00E676', this)"></div>
-              <div class="color-dot" style="background: #FF9100;" onclick="setActiveWordColor('#FF9100', this)"></div>
-              <div class="color-dot" style="background: #FFFFFF;" onclick="setActiveWordColor('#FFFFFF', this)"></div>
+          <div class="seg-button" id="btnModeRequest" onclick="setClipMethod('request')">
+            <div class="seg-icon">✂️</div>
+            <div class="seg-info">
+              <h4>Klip by Request</h4>
+              <p>Tentukan menit awal & akhir manual</p>
             </div>
           </div>
         </div>
 
-        <!-- ================= TAB 2: CAPTIONS ================= -->
-        <div class="tab-pane" id="captionsTab">
+        <!-- Option A: Auto Klip AI - Clip Count -->
+        <div class="slider-box" id="autoAiSection">
+          <div class="slider-header-flex">
+            <span style="font-size: 13px; color: var(--text-muted); font-weight: 600;">Jumlah Klip yang Dihasilkan (Clip Count):</span>
+            <span style="font-size: 15px; font-weight: 800; color: var(--primary);" id="clipCountLabel">3 Klip AI</span>
+          </div>
+          <input type="range" class="slider-track" min="1" max="6" value="3" oninput="updateClipCount(this.value)">
+          <p style="font-size: 11px; color: var(--text-muted);">AI akan memilih momen dengan retensi audiens tertinggi dan membaginya sesuai durasi Shorts (30–55 detik).</p>
+        </div>
+
+        <!-- Option B: Klip by Request - Manual Minutes -->
+        <div class="slider-box" id="byRequestSection" style="display: none;">
+          <div class="manual-row-list" id="manualRowsContainer">
+            <div class="manual-row-item">
+              <span style="font-size: 13px; font-weight: 700; color: var(--primary);">Klip #1</span>
+              <input type="text" class="text-field" style="padding: 8px 12px; font-size: 13px;" value="01:05">
+              <span>sampai</span>
+              <input type="text" class="text-field" style="padding: 8px 12px; font-size: 13px;" value="01:50">
+            </div>
+          </div>
+          <button class="icon-btn" style="margin-top: 10px; width: 100%; justify-content: center;" onclick="addManualRow()">
+            + Tambah Klip Lagi
+          </button>
+        </div>
+      </div>
+
+      <!-- Action Button -->
+      <button class="start-clipper-btn" onclick="startProcessingClipper()">
+        <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+        Mulai Klip Video AI
+      </button>
+
+    </div>
+  </section>
+
+  <!-- ================================================================
+       SCREEN 2: REVIEW / SELEKSI KLIP (REVIEW SCREEN)
+       ================================================================ -->
+  <section class="app-screen" id="reviewScreen">
+    <div class="review-wrapper">
+      
+      <div class="review-header-card">
+        <div>
+          <h2 style="font-size: 20px; font-weight: 800;">Daftar Rekomendasi Klip AI</h2>
+          <p style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">Pilih klip mana saja yang ingin Anda render atau edit lebih lanjut:</p>
+        </div>
+        <button class="apk-download-btn" onclick="proceedToStudioEditor()">
+          Lanjutkan ke Studio Editor (3 Klip) →
+        </button>
+      </div>
+
+      <!-- Clips List -->
+      <div class="review-list" id="clipsListContainer">
+        
+        <!-- Clip 1 -->
+        <div class="clip-card selected" onclick="toggleClipSelection(this)">
+          <input type="checkbox" class="clip-checkbox" checked>
+          <div>
+            <div class="clip-badge-score">🔥 Virality Score: 9.8 / 10</div>
+            <div class="clip-hook-tag">JANGAN SKIP! RAHASIANYA DISINI</div>
+            <h3 style="font-size: 15px; font-weight: 800; color: white;">Momen Hook Paling Krusial di Awal Video</h3>
+            <p style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">Durasi: <strong>00:45 - 01:25 (40 detik)</strong> • Puncak rasa penasaran penonton dengan retensi tertinggi.</p>
+          </div>
+          <button class="icon-btn" style="border-color: var(--primary); color: var(--primary);" onclick="event.stopPropagation(); proceedToStudioEditor();">
+            Edit Klip
+          </button>
+        </div>
+
+        <!-- Clip 2 -->
+        <div class="clip-card selected" onclick="toggleClipSelection(this)">
+          <input type="checkbox" class="clip-checkbox" checked>
+          <div>
+            <div class="clip-badge-score">⚡ Virality Score: 9.4 / 10</div>
+            <div class="clip-hook-tag">TERNYATA SEPERTI INI CARANYA</div>
+            <h3 style="font-size: 15px; font-weight: 800; color: white;">Penjelasan Solusi & Strategi Praktis</h3>
+            <p style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">Durasi: <strong>03:10 - 03:55 (45 detik)</strong> • Poin pencerahan praktis yang paling sering di-save audiens.</p>
+          </div>
+          <button class="icon-btn" onclick="event.stopPropagation(); proceedToStudioEditor();">
+            Edit Klip
+          </button>
+        </div>
+
+        <!-- Clip 3 -->
+        <div class="clip-card selected" onclick="toggleClipSelection(this)">
+          <input type="checkbox" class="clip-checkbox" checked>
+          <div>
+            <div class="clip-badge-score">💡 Virality Score: 9.1 / 10</div>
+            <div class="clip-hook-tag">KESIMPULAN PENTING BANGET</div>
+            <h3 style="font-size: 15px; font-weight: 800; color: white;">Takeaway Emas & Ajakan Bertindak</h3>
+            <p style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">Durasi: <strong>07:20 - 08:05 (45 detik)</strong> • Ringkasan inti yang memicu komentar dan share.</p>
+          </div>
+          <button class="icon-btn" onclick="event.stopPropagation(); proceedToStudioEditor();">
+            Edit Klip
+          </button>
+        </div>
+
+      </div>
+
+      <!-- Action Button Bottom -->
+      <button class="start-clipper-btn" onclick="proceedToStudioEditor()">
+        Lanjutkan ke Studio Editor (Continue)
+      </button>
+
+    </div>
+  </section>
+
+  <!-- ================================================================
+       SCREEN 3: STUDIO EDITOR (STUDIO SCREEN)
+       ================================================================ -->
+  <section class="app-screen" id="studioScreen">
+    <div class="studio-container">
+
+      <!-- Left Column: 9:16 Shorts Canvas Preview -->
+      <div class="preview-column">
+        <div class="phone-mockup-wrapper">
+          <div class="phone-notch"></div>
+          <div class="canvas-viewport" id="viewport">
+            
+            <!-- Sample Video Element -->
+            <video id="videoPlayer" class="canvas-video" playsinline loop muted>
+              <source src="https://assets.mixkit.co/videos/preview/mixkit-young-man-talking-to-camera-in-a-video-call-41132-large.mp4" type="video/mp4">
+            </video>
+
+            <!-- Hook Headline Banner -->
+            <div class="hook-banner" id="hookBanner">JANGAN SKIP! RAHASIANYA DISINI 🔥</div>
+
+            <!-- Live Dynamic Subtitle Overlay -->
+            <div class="subtitle-overlay-box" id="subtitleBox" style="bottom: 70px;">
+              <div class="subtitle-text" id="subtitleText">
+                <span class="word-token">RAHASIA</span>
+                <span class="word-token active">SUKSES</span>
+                <span class="word-token">YOUTUBE</span>
+                <span class="word-token">SHORTS</span>
+              </div>
+            </div>
+
+            <!-- Dynamic Watermark -->
+            <div class="watermark-badge" id="watermarkBadge">@channelmu</div>
+          </div>
+        </div>
+
+        <!-- Player Controls -->
+        <div class="player-controls">
+          <div class="scrubber-wrap">
+            <span class="time-label" id="curTime">00:00</span>
+            <input type="range" class="slider-track" id="videoScrubber" min="0" max="15" step="0.1" value="0" oninput="seekVideo(this.value)">
+            <span class="time-label" id="totTime">00:15</span>
+          </div>
+
+          <div class="ctrl-buttons">
+            <div class="ctrl-group-left">
+              <button class="play-btn" id="playBtn" onclick="togglePlay()">
+                <svg id="playIcon" width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+              </button>
+              <button class="icon-btn" onclick="restartVideo()" title="Putar Ulang">
+                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+              </button>
+              <button class="icon-btn" id="muteBtn" onclick="toggleAudio()" title="Suara Video">
+                <svg id="volIcon" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/></svg>
+              </button>
+            </div>
+
+            <div style="font-size: 12px; color: var(--text-muted); font-weight: 600;">
+              Format: <span style="color: white;">9:16 Shorts</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column: Interactive Studio Tools -->
+      <div class="tools-column">
+        
+        <!-- Tab Bar -->
+        <div class="tab-bar">
+          <div class="tab-item active" onclick="switchTab('styleTab', this)">
+            🎨 Gaya Subtitle
+          </div>
+          <div class="tab-item" onclick="switchTab('captionsTab', this)">
+            💬 Captions
+          </div>
+          <div class="tab-item" onclick="switchTab('aiToolsTab', this)">
+            ⚡ AI Tools
+          </div>
+          <div class="tab-item" onclick="switchTab('komposisiTab', this)">
+            📐 Komposisi
+          </div>
+        </div>
+
+        <!-- Tab Content Area -->
+        <div class="tab-content">
           
-          <!-- Generator Subtitle Otomatis -->
-          <div class="generator-banner">
-            <div style="display: flex; gap: 12px; align-items: center;">
-              <div style="width: 36px; height: 36px; background: var(--primary); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px;">⚡</div>
+          <!-- TAB 1: STYLE -->
+          <div class="tab-pane active" id="styleTab">
+            
+            <div class="config-card">
+              <div class="card-header-title">Preset Gaya Subtitle Populer</div>
+              <div class="preset-grid">
+                
+                <div class="preset-btn active" onclick="applyPreset('beast', this)">
+                  <div class="preset-preview-text" style="font-family: 'Anton'; color: #FFF; -webkit-text-stroke: 1.5px #000; text-shadow: 2px 2px 0 #000; background: #FFD600; color: #000; padding: 2px 6px; border-radius: 4px;">BEAST</div>
+                  <div class="preset-label">Trending #1</div>
+                </div>
+
+                <div class="preset-btn" onclick="applyPreset('retro', this)">
+                  <div class="preset-preview-text" style="font-family: 'Bebas Neue'; color: #00FFCC; text-shadow: 0 0 10px #00FFCC;">RETRO</div>
+                  <div class="preset-label">Neon Cyber</div>
+                </div>
+
+                <div class="preset-btn" onclick="applyPreset('bold', this)">
+                  <div class="preset-preview-text" style="font-family: 'Montserrat'; color: #FFFFFF; -webkit-text-stroke: 1.8px #000;">IMPACT</div>
+                  <div class="preset-label">Bold Clean</div>
+                </div>
+
+                <div class="preset-btn" onclick="applyPreset('minimal', this)">
+                  <div class="preset-preview-text" style="font-family: 'Poppins'; color: #FFE600; font-weight: 800;">CLEAN</div>
+                  <div class="preset-label">Podcast Minimal</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="config-card">
+              <div class="card-header-title">Kustomisasi Font & Ukuran</div>
+              
+              <div class="slider-box" style="margin-bottom: 14px;">
+                <span style="font-size: 13px; color: var(--text-muted); font-weight: 600;">Jenis Font (Google Fonts):</span>
+                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;">
+                  <button class="icon-btn" style="width: auto; font-family: 'Anton'; font-size: 15px;" onclick="setFontFamily('Anton')">Anton</button>
+                  <button class="icon-btn" style="width: auto; font-family: 'Bebas Neue'; font-size: 16px;" onclick="setFontFamily('Bebas Neue')">Bebas</button>
+                  <button class="icon-btn" style="width: auto; font-family: 'Montserrat'; font-size: 13px;" onclick="setFontFamily('Montserrat')">Monts</button>
+                  <button class="icon-btn" style="width: auto; font-family: 'Poppins'; font-size: 13px;" onclick="setFontFamily('Poppins')">Poppins</button>
+                </div>
+              </div>
+
+              <!-- Rentang font minimal mulai dari 5px -->
+              <div class="slider-box">
+                <div class="slider-header-flex">
+                  <span style="font-size: 13px; color: var(--text-muted); font-weight: 600;">Ukuran Font Subtitle (Bisa dari 5px):</span>
+                  <span style="font-size: 14px; font-weight: 800; color: white;" id="fontSizeVal">24px</span>
+                </div>
+                <input type="range" class="slider-track" min="5" max="48" value="24" oninput="setFontSize(this.value)">
+              </div>
+            </div>
+
+            <div class="config-card">
+              <div class="card-header-title">Warna Highlight Kata Aktif</div>
+              <div class="color-swatches">
+                <div class="color-dot active" style="background: #FFE600;" onclick="setActiveWordColor('#FFE600', this)"></div>
+                <div class="color-dot" style="background: #00FFCC;" onclick="setActiveWordColor('#00FFCC', this)"></div>
+                <div class="color-dot" style="background: #FF2E54;" onclick="setActiveWordColor('#FF2E54', this)"></div>
+                <div class="color-dot" style="background: #00E676;" onclick="setActiveWordColor('#00E676', this)"></div>
+                <div class="color-dot" style="background: #FF9100;" onclick="setActiveWordColor('#FF9100', this)"></div>
+                <div class="color-dot" style="background: #FFFFFF;" onclick="setActiveWordColor('#FFFFFF', this)"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB 2: CAPTIONS -->
+          <div class="tab-pane" id="captionsTab">
+            <div class="hero-banner" style="padding: 18px;">
               <div>
-                <h4 style="font-size: 14px; font-weight: 800;">AI Caption Maker Mandiri</h4>
+                <h4 style="font-size: 15px; font-weight: 800;">AI Caption Maker Mandiri</h4>
                 <p style="font-size: 12px; color: var(--text-muted);">Ekstrak ucapan kata-demi-kata langsung tanpa token / API key</p>
               </div>
-            </div>
-            <button class="gen-btn" onclick="simulateAiCaptionGeneration()">
-              <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-              Generate Subtitle Otomatis
-            </button>
-          </div>
-
-          <!-- Daftar Baris Subtitle -->
-          <div class="section-card">
-            <div class="card-title">
-              <span>Daftar Baris Subtitle (3)</span>
-              <button class="icon-btn" style="width: 28px; height: 28px;" title="Tambah Baris" onclick="addNewLine()">+</button>
-            </div>
-            
-            <div class="subs-list" id="subsListContainer">
-              <div class="sub-item active" onclick="selectSubtitleLine(0)">
-                <div>
-                  <div class="sub-time">00:00 - 00:04</div>
-                  <div class="sub-text-preview">RAHASIA SUKSES YOUTUBE SHORTS</div>
-                </div>
-                <span style="color: var(--primary); font-size: 18px;">▶</span>
-              </div>
-
-              <div class="sub-item" onclick="selectSubtitleLine(1)">
-                <div>
-                  <div class="sub-time">00:04 - 00:08</div>
-                  <div class="sub-text-preview">JANGAN BUAT KONTEN MEMBOSANKAN</div>
-                </div>
-                <span style="color: var(--text-muted); font-size: 18px;">▶</span>
-              </div>
-
-              <div class="sub-item" onclick="selectSubtitleLine(2)">
-                <div>
-                  <div class="sub-time">00:08 - 00:15</div>
-                  <div class="sub-text-preview">PAKAI RETENSI HOOK DI 3 DETIK PERTAMA</div>
-                </div>
-                <span style="color: var(--text-muted); font-size: 18px;">▶</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Efek Transisi Subtitle -->
-          <div class="section-card">
-            <div class="card-title">Transisi Animasi Kata</div>
-            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
-              <button class="icon-btn" style="width: auto; border-color: var(--primary); color: var(--primary);" onclick="setTransition('fade')">Fade In</button>
-              <button class="icon-btn" style="width: auto;" onclick="setTransition('wipe')">Wipe</button>
-              <button class="icon-btn" style="width: auto;" onclick="setTransition('zoom')">Zoom In</button>
-            </div>
-          </div>
-        </div>
-
-        <!-- ================= TAB 3: AI TOOLS ================= -->
-        <div class="tab-pane" id="aiToolsTab">
-          <div class="section-card">
-            <div class="card-title">Alat Otomatisasi AI</div>
-            
-            <div class="toggle-row">
-              <div>
-                <div class="toggle-label">Auto Punch-In Dinamis</div>
-                <div class="toggle-desc">Zoom in otomatis pada kalimat penting untuk meningkatkan retensi</div>
-              </div>
-              <label class="switch">
-                <input type="checkbox" id="punchInToggle" checked onchange="togglePunchIn(this.checked)">
-                <span class="slider-switch"></span>
-              </label>
-            </div>
-
-            <div class="toggle-row">
-              <div>
-                <div class="toggle-label">Clean Speech AI</div>
-                <div class="toggle-desc">Jernihkan vokal suara dan hilangkan desis kebisingan latar</div>
-              </div>
-              <label class="switch">
-                <input type="checkbox" checked>
-                <span class="slider-switch"></span>
-              </label>
-            </div>
-
-            <div class="toggle-row">
-              <div>
-                <div class="toggle-label">Smart Narrative Cut</div>
-                <div class="toggle-desc">Hilangkan jeda nafas dan jeda hening pembicara secara presisi</div>
-              </div>
-              <label class="switch">
-                <input type="checkbox" checked>
-                <span class="slider-switch"></span>
-              </label>
-            </div>
-          </div>
-
-          <!-- Hook Viral Rekomendasi -->
-          <div class="section-card">
-            <div class="card-title">AI Hook Headline Generator</div>
-            <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">Pilih hook headline terbaik yang langsung diterapkan pada banner atas:</p>
-            <div style="display: flex; flex-direction: column; gap: 8px;">
-              <button class="icon-btn" style="width: 100%; justify-content: flex-start; padding: 12px;" onclick="setHookText('JANGAN SKIP! RAHASIA PENTING 🔥')">
-                🔥 JANGAN SKIP! RAHASIA PENTING
-              </button>
-              <button class="icon-btn" style="width: 100%; justify-content: flex-start; padding: 12px;" onclick="setHookText('TERNYATA CARA INI YANG BIKIN VIRAL 😱')">
-                😱 TERNYATA CARA INI YANG BIKIN VIRAL
-              </button>
-              <button class="icon-btn" style="width: 100%; justify-content: flex-start; padding: 12px;" onclick="setHookText('STOP LAKUKAN KESALAHAN INI SEKARANG ⚡')">
-                ⚡ STOP LAKUKAN KESALAHAN INI SEKARANG
+              <button class="start-clipper-btn" style="padding: 10px 18px; font-size: 13px;" onclick="simulateAiCaptionGeneration()">
+                Generate Subtitle
               </button>
             </div>
-          </div>
-        </div>
 
-        <!-- ================= TAB 4: KOMPOSISI ================= -->
-        <div class="tab-pane" id="komposisiTab">
-          
-          <!-- Template Komposisi -->
-          <div class="section-card">
-            <div class="card-title">Template Komposisi Video</div>
-            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
-              <button class="icon-btn" style="width: auto; border-color: var(--primary); color: var(--primary);" onclick="setTemplate('fullscreen')">9:16 Full</button>
-              <button class="icon-btn" style="width: auto;" onclick="setTemplate('split')">Split</button>
-              <button class="icon-btn" style="width: auto;" onclick="setTemplate('fit')">Fit Video</button>
-            </div>
-
-            <!-- Framing Crop Slider -->
-            <div class="slider-row" style="margin-top: 16px;">
-              <div class="slider-header">
-                <span>Posisi Crop Wajah / Objek</span>
-                <span class="slider-value" id="cropPosVal">Tengah (50%)</span>
+            <div class="config-card">
+              <div class="card-header-title">Daftar Baris Subtitle (3)</div>
+              <div style="display: flex; flex-direction: column; gap: 8px;">
+                <div class="input-box-wrapper" style="padding: 12px; cursor: pointer;">
+                  <span style="font-size: 11px; color: var(--primary); font-weight: 700;">00:00 - 00:04</span>
+                  <p style="font-size: 13px; font-weight: 700; color: white;">RAHASIA SUKSES YOUTUBE SHORTS</p>
+                </div>
+                <div class="input-box-wrapper" style="padding: 12px; cursor: pointer;">
+                  <span style="font-size: 11px; color: var(--primary); font-weight: 700;">00:04 - 00:08</span>
+                  <p style="font-size: 13px; font-weight: 700; color: white;">JANGAN BUAT KONTEN MEMBOSANKAN</p>
+                </div>
+                <div class="input-box-wrapper" style="padding: 12px; cursor: pointer;">
+                  <span style="font-size: 11px; color: var(--primary); font-weight: 700;">00:08 - 00:15</span>
+                  <p style="font-size: 13px; font-weight: 700; color: white;">PAKAI RETENSI HOOK DI 3 DETIK PERTAMA</p>
+                </div>
               </div>
-              <input type="range" class="slider-track" min="0" max="100" value="50" oninput="setCropPosition(this.value)">
             </div>
           </div>
 
-          <!-- Watermark Setting -->
-          <div class="section-card">
-            <div class="card-title">Pengaturan Watermark</div>
-            <div class="slider-row">
-              <div class="slider-header">
-                <span>Teks Watermark Channel</span>
+          <!-- TAB 3: AI TOOLS -->
+          <div class="tab-pane" id="aiToolsTab">
+            <div class="config-card">
+              <div class="card-header-title">Alat Otomatisasi AI</div>
+              <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0;">
+                <div>
+                  <h4 style="font-size: 14px; font-weight: 700;">Auto Punch-In Dinamis</h4>
+                  <p style="font-size: 12px; color: var(--text-muted);">Zoom in otomatis pada kalimat penting untuk retensi</p>
+                </div>
+                <input type="checkbox" id="punchInToggle" checked style="width: 20px; height: 20px; accent-color: var(--primary);">
               </div>
-              <input type="text" id="watermarkInput" value="@channelmu" style="background: rgba(15,23,42,0.8); border: 1px solid var(--card-border); color: white; padding: 10px 14px; border-radius: 10px; outline: none;" oninput="updateWatermark(this.value)">
+            </div>
+
+            <div class="config-card">
+              <div class="card-header-title">Rekomendasi Hook Headline</div>
+              <div style="display: flex; flex-direction: column; gap: 8px;">
+                <button class="icon-btn" style="width: 100%; justify-content: flex-start;" onclick="setHookText('JANGAN SKIP! RAHASIANYA DISINI 🔥')">
+                  🔥 JANGAN SKIP! RAHASIANYA DISINI
+                </button>
+                <button class="icon-btn" style="width: 100%; justify-content: flex-start;" onclick="setHookText('TERNYATA CARA INI YANG BIKIN VIRAL 😱')">
+                  😱 TERNYATA CARA INI YANG BIKIN VIRAL
+                </button>
+              </div>
             </div>
           </div>
-        </div>
 
+          <!-- TAB 4: KOMPOSISI -->
+          <div class="tab-pane" id="komposisiTab">
+            <div class="config-card">
+              <div class="card-header-title">Format Komposisi Video</div>
+              <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
+                <button class="icon-btn" style="border-color: var(--primary); color: var(--primary);">9:16 Shorts</button>
+                <button class="icon-btn">1:1 Square</button>
+                <button class="icon-btn">Fit Video</button>
+              </div>
+            </div>
+
+            <div class="config-card">
+              <div class="card-header-title">Watermark Channel</div>
+              <input type="text" class="text-field" value="@channelmu" oninput="updateWatermark(this.value)">
+            </div>
+          </div>
+
+        </div>
       </div>
-    </div>
-  </main>
 
-  <!-- Simulation Modal Progress Dialog -->
+    </div>
+  </section>
+
+  <!-- Modal Progress AI Detection -->
   <div class="modal-overlay" id="progressModal">
     <div class="progress-box">
       <div class="spinner"></div>
-      <h3 style="font-size: 16px; font-weight: 800; margin-bottom: 8px;" id="modalStatus">Menganalisis Gelombang Audio Video...</h3>
+      <h3 style="font-size: 16px; font-weight: 800; margin-bottom: 8px;" id="modalStatus">AI Menganalisis Video...</h3>
       <p style="font-size: 12px; color: var(--text-muted); line-height: 1.6;" id="modalDetail">
-        Menyelaraskan ucapan kata-demi-kata via On-Device Neural Speech Engine (100% Offline Tanpa Token)...
+        Mendeteksi momen dengan virality score tertinggi dan closed captions...
       </p>
       <div style="margin-top: 18px; background: rgba(255,255,255,0.06); height: 8px; border-radius: 999px; overflow: hidden;">
         <div id="modalBar" style="background: var(--primary); height: 100%; width: 25%; transition: width 0.3s;"></div>
@@ -1080,41 +1349,156 @@
   <script>
     // State Studio
     const state = {
-      isPlaying: false,
-      isMuted: true,
-      activeWordColor: '#FFE600',
-      fontSize: 24,
-      subPosition: 'bawah',
+      currentScreen: 'homeScreen',
+      sourceType: 'youtube',
+      clipMethod: 'auto',
+      clipCount: 3,
       fontFamily: 'Anton',
-      hookText: 'JANGAN SKIP! RAHASIA PENTING 🔥',
+      fontSize: 24,
+      activeWordColor: '#FFE600',
+      hookText: 'JANGAN SKIP! RAHASIANYA DISINI 🔥',
       watermark: '@channelmu',
-      activeLineIndex: 0,
       lines: [
         { start: 0, end: 4, text: ['RAHASIA', 'SUKSES', 'YOUTUBE', 'SHORTS'] },
         { start: 4, end: 8, text: ['JANGAN', 'BUAT', 'KONTEN', 'MEMBOSANKAN'] },
         { start: 8, end: 15, text: ['PAKAI', 'RETENSI', 'HOOK', '3 DETIK'] }
-      ],
-      history: [],
-      redoStack: []
+      ]
     };
 
     const video = document.getElementById('videoPlayer');
-    const playBtn = document.getElementById('playBtn');
     const playIcon = document.getElementById('playIcon');
     const scrubber = document.getElementById('videoScrubber');
     const curTimeLabel = document.getElementById('curTime');
     const totTimeLabel = document.getElementById('totTime');
-    const subtitleBox = document.getElementById('subtitleBox');
     const subtitleText = document.getElementById('subtitleText');
     const hookBanner = document.getElementById('hookBanner');
     const watermarkBadge = document.getElementById('watermarkBadge');
 
-    // Video events
-    video.addEventListener('loadedmetadata', () => {
-      scrubber.max = video.duration || 15;
-      totTimeLabel.innerText = formatTime(video.duration || 15);
-    });
+    // Navigation Between Screens
+    function navigateTo(screenId) {
+      document.querySelectorAll('.app-screen').forEach(s => s.classList.remove('active'));
+      document.getElementById(screenId).classList.add('active');
+      state.currentScreen = screenId;
 
+      const btnBack = document.getElementById('btnBackHome');
+      const headerSubtitle = document.getElementById('headerSubtitle');
+
+      if (screenId === 'homeScreen') {
+        btnBack.style.display = 'none';
+        headerSubtitle.innerText = 'Beranda Pemotong Video AI Otomatis';
+        video.pause();
+      } else if (screenId === 'reviewScreen') {
+        btnBack.style.display = 'inline-flex';
+        headerSubtitle.innerText = 'Review & Seleksi Momen Viral AI';
+        video.pause();
+      } else if (screenId === 'studioScreen') {
+        btnBack.style.display = 'inline-flex';
+        headerSubtitle.innerText = 'Rekomendasi Klip AI (Studio Editor)';
+        video.play().catch(() => {});
+      }
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // Source Selection (YouTube vs Gallery)
+    function setVideoSource(type) {
+      state.sourceType = type;
+      if (type === 'youtube') {
+        document.getElementById('btnSrcYt').classList.add('active');
+        document.getElementById('btnSrcGallery').classList.remove('active');
+        document.getElementById('ytInputBox').style.display = 'flex';
+        document.getElementById('galleryInputBox').style.display = 'none';
+      } else {
+        document.getElementById('btnSrcYt').classList.remove('active');
+        document.getElementById('btnSrcGallery').classList.add('active');
+        document.getElementById('ytInputBox').style.display = 'none';
+        document.getElementById('galleryInputBox').style.display = 'block';
+      }
+    }
+
+    // Clip Method (Auto AI vs By Request)
+    function setClipMethod(method) {
+      state.clipMethod = method;
+      if (method === 'auto') {
+        document.getElementById('btnModeAuto').classList.add('active');
+        document.getElementById('btnModeRequest').classList.remove('active');
+        document.getElementById('autoAiSection').style.display = 'flex';
+        document.getElementById('byRequestSection').style.display = 'none';
+      } else {
+        document.getElementById('btnModeAuto').classList.remove('active');
+        document.getElementById('btnModeRequest').classList.add('active');
+        document.getElementById('autoAiSection').style.display = 'none';
+        document.getElementById('byRequestSection').style.display = 'block';
+      }
+    }
+
+    function updateClipCount(val) {
+      state.clipCount = val;
+      document.getElementById('clipCountLabel').innerText = `${val} Klip AI`;
+    }
+
+    function pasteSampleUrl() {
+      document.getElementById('ytUrlInput').value = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
+      document.getElementById('ytVideoTitle').innerText = 'Rahasia Sukses YouTube Shorts (Podcast Highlight Viral)';
+    }
+
+    function selectSampleGalleryVideo() {
+      alert('Video galeri HP berhasil dipilih: video_podcast_highlight.mp4 (Durasi: 03:45)');
+    }
+
+    function addManualRow() {
+      const container = document.getElementById('manualRowsContainer');
+      const count = container.children.length + 1;
+      const row = document.createElement('div');
+      row.className = 'manual-row-item';
+      row.innerHTML = `
+        <span style="font-size: 13px; font-weight: 700; color: var(--primary);">Klip #${count}</span>
+        <input type="text" class="text-field" style="padding: 8px 12px; font-size: 13px;" value="02:10">
+        <span>sampai</span>
+        <input type="text" class="text-field" style="padding: 8px 12px; font-size: 13px;" value="02:55">
+      `;
+      container.appendChild(row);
+    }
+
+    // Trigger AI Processing & Transition to Screen 2
+    function startProcessingClipper() {
+      const modal = document.getElementById('progressModal');
+      const status = document.getElementById('modalStatus');
+      const detail = document.getElementById('modalDetail');
+      const bar = document.getElementById('modalBar');
+
+      modal.classList.add('open');
+      bar.style.width = '25%';
+      status.innerText = 'Mengambil Transkrip & Subtitle Audio...';
+      detail.innerText = 'Mengekstrak gelombang vokal dan Closed Captions dari video...';
+
+      setTimeout(() => {
+        bar.style.width = '65%';
+        status.innerText = 'AI Menganalisis Momen Viral...';
+        detail.innerText = `Menemukan ${state.clipCount} momen dengan virality score tertinggi (9.8, 9.4, 9.1)...`;
+      }, 900);
+
+      setTimeout(() => {
+        bar.style.width = '100%';
+        modal.classList.remove('open');
+        if (state.clipMethod === 'auto') {
+          navigateTo('reviewScreen');
+        } else {
+          navigateTo('studioScreen');
+        }
+      }, 1900);
+    }
+
+    function toggleClipSelection(el) {
+      el.classList.toggle('selected');
+      const cb = el.querySelector('.clip-checkbox');
+      if (cb) cb.checked = el.classList.contains('selected');
+    }
+
+    function proceedToStudioEditor() {
+      navigateTo('studioScreen');
+    }
+
+    // Video Player & Subtitles in Studio
     video.addEventListener('timeupdate', () => {
       scrubber.value = video.currentTime;
       curTimeLabel.innerText = formatTime(video.currentTime);
@@ -1144,19 +1528,12 @@
 
     function toggleAudio() {
       video.muted = !video.muted;
-      const volIcon = document.getElementById('volIcon');
-      if (video.muted) {
-        volIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/>';
-      } else {
-        volIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" d="M11 5L6 9H2v6h4l5 4V5z"/><path stroke-linecap="round" stroke-linejoin="round" d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/>';
-      }
     }
 
     function seekVideo(val) {
       video.currentTime = val;
     }
 
-    // Dynamic word-by-word subtitle rendering
     function updateLiveSubtitles(time) {
       let currentLine = state.lines.find(l => time >= l.start && time < l.end);
       if (!currentLine) currentLine = state.lines[0];
@@ -1172,7 +1549,6 @@
         return `<span class="word-token ${isActive ? 'active' : ''}" style="color: ${color}; font-family: '${state.fontFamily}'; font-size: ${state.fontSize}px;">${word}</span>`;
       }).join(' ');
 
-      // Auto punch-in zoom effect simulation
       if (document.getElementById('punchInToggle').checked) {
         if (activeWordIndex === 1 || activeWordIndex === 2) {
           video.classList.add('punch-in');
@@ -1182,7 +1558,7 @@
       }
     }
 
-    // Switch Studio Tab
+    // Studio Editing Functions
     function switchTab(tabId, el) {
       document.querySelectorAll('.tab-item').forEach(t => t.classList.remove('active'));
       document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
@@ -1190,9 +1566,7 @@
       document.getElementById(tabId).classList.add('active');
     }
 
-    // Font Presets
     function applyPreset(type, el) {
-      saveSnapshot();
       document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
       el.classList.add('active');
 
@@ -1204,21 +1578,18 @@
         subtitleText.style.color = '#000';
         subtitleText.style.padding = '4px 10px';
         subtitleText.style.borderRadius = '6px';
-        subtitleText.style.webkitTextStroke = '1px #000';
       } else if (type === 'retro') {
         state.fontFamily = 'Bebas Neue';
         state.activeWordColor = '#00FFCC';
         state.fontSize = 32;
         subtitleText.style.background = 'transparent';
         subtitleText.style.textShadow = '0 0 12px #00FFCC';
-        subtitleText.style.webkitTextStroke = 'none';
       } else if (type === 'bold') {
         state.fontFamily = 'Montserrat';
         state.activeWordColor = '#FF2E54';
         state.fontSize = 22;
         subtitleText.style.background = 'transparent';
         subtitleText.style.textShadow = '2px 2px 0 #000';
-        subtitleText.style.webkitTextStroke = '1.5px #000';
       } else if (type === 'minimal') {
         state.fontFamily = 'Poppins';
         state.activeWordColor = '#FFE600';
@@ -1226,14 +1597,11 @@
         subtitleText.style.background = 'rgba(0,0,0,0.6)';
         subtitleText.style.padding = '4px 12px';
         subtitleText.style.borderRadius = '8px';
-        subtitleText.style.textShadow = 'none';
-        subtitleText.style.webkitTextStroke = 'none';
       }
       updateLiveSubtitles(video.currentTime);
     }
 
     function setFontFamily(font) {
-      saveSnapshot();
       state.fontFamily = font;
       updateLiveSubtitles(video.currentTime);
     }
@@ -1244,26 +1612,7 @@
       updateLiveSubtitles(video.currentTime);
     }
 
-    function setSubPosition(pos) {
-      saveSnapshot();
-      state.subPosition = pos;
-      document.getElementById('subPosVal').innerText = pos.toUpperCase();
-      if (pos === 'atas') {
-        subtitleBox.style.top = '100px';
-        subtitleBox.style.bottom = 'auto';
-      } else if (pos === 'tengah') {
-        subtitleBox.style.top = '50%';
-        subtitleBox.style.bottom = 'auto';
-        subtitleBox.style.transform = 'translateY(-50%)';
-      } else {
-        subtitleBox.style.top = 'auto';
-        subtitleBox.style.bottom = '70px';
-        subtitleBox.style.transform = 'none';
-      }
-    }
-
     function setActiveWordColor(color, el) {
-      saveSnapshot();
       document.querySelectorAll('.color-dot').forEach(d => d.classList.remove('active'));
       el.classList.add('active');
       state.activeWordColor = color;
@@ -1271,7 +1620,6 @@
     }
 
     function setHookText(text) {
-      saveSnapshot();
       state.hookText = text;
       hookBanner.innerText = text;
     }
@@ -1281,16 +1629,6 @@
       watermarkBadge.innerText = text;
     }
 
-    function setCropPosition(val) {
-      document.getElementById('cropPosVal').innerText = `${val}%`;
-      video.style.objectPosition = `${val}% center`;
-    }
-
-    function togglePunchIn(checked) {
-      if (!checked) video.classList.remove('punch-in');
-    }
-
-    // AI Caption Generator Simulation
     function simulateAiCaptionGeneration() {
       const modal = document.getElementById('progressModal');
       const status = document.getElementById('modalStatus');
@@ -1299,92 +1637,22 @@
 
       modal.classList.add('open');
       bar.style.width = '20%';
+      status.innerText = 'Mendeteksi Gelombang Vokal 16kHz...';
+      detail.innerText = 'Menjalankan engine Whisper On-Device tanpa API key...';
 
       setTimeout(() => {
-        status.innerText = 'Mendeteksi Gelombang Vokal 16kHz...';
-        detail.innerText = 'Menjalankan engine Whisper On-Device tanpa API key...';
-        bar.style.width = '55%';
-      }, 700);
-
-      setTimeout(() => {
+        bar.style.width = '70%';
         status.innerText = 'Menyusun Word-by-Word Timestamps...';
         detail.innerText = 'Menyelaraskan 12 kata ke dalam 3 segmen Shorts...';
-        bar.style.width = '88%';
-      }, 1500);
+      }, 800);
 
       setTimeout(() => {
         bar.style.width = '100%';
         modal.classList.remove('open');
         video.currentTime = 0;
         video.play();
-      }, 2100);
+      }, 1600);
     }
-
-    // Undo / Redo functionality
-    function saveSnapshot() {
-      state.history.push(JSON.stringify({
-        fontFamily: state.fontFamily,
-        fontSize: state.fontSize,
-        activeWordColor: state.activeWordColor,
-        subPosition: state.subPosition,
-        hookText: state.hookText
-      }));
-      state.redoStack = [];
-      updateUndoButtons();
-    }
-
-    function undoAction() {
-      if (state.history.length === 0) return;
-      const current = JSON.stringify({
-        fontFamily: state.fontFamily,
-        fontSize: state.fontSize,
-        activeWordColor: state.activeWordColor,
-        subPosition: state.subPosition,
-        hookText: state.hookText
-      });
-      state.redoStack.push(current);
-
-      const prev = JSON.parse(state.history.pop());
-      state.fontFamily = prev.fontFamily;
-      state.fontSize = prev.fontSize;
-      state.activeWordColor = prev.activeWordColor;
-      state.subPosition = prev.subPosition;
-      state.hookText = prev.hookText;
-      hookBanner.innerText = state.hookText;
-      updateLiveSubtitles(video.currentTime);
-      updateUndoButtons();
-    }
-
-    function redoAction() {
-      if (state.redoStack.length === 0) return;
-      const next = JSON.parse(state.redoStack.pop());
-      state.history.push(JSON.stringify({
-        fontFamily: state.fontFamily,
-        fontSize: state.fontSize,
-        activeWordColor: state.activeWordColor,
-        subPosition: state.subPosition,
-        hookText: state.hookText
-      }));
-      state.fontFamily = next.fontFamily;
-      state.fontSize = next.fontSize;
-      state.activeWordColor = next.activeWordColor;
-      state.subPosition = next.subPosition;
-      state.hookText = next.hookText;
-      hookBanner.innerText = state.hookText;
-      updateLiveSubtitles(video.currentTime);
-      updateUndoButtons();
-    }
-
-    function updateUndoButtons() {
-      document.getElementById('btnUndo').disabled = state.history.length === 0;
-      document.getElementById('btnRedo').disabled = state.redoStack.length === 0;
-    }
-
-    // Initialize playback
-    window.addEventListener('DOMContentLoaded', () => {
-      updateLiveSubtitles(0);
-      video.play().catch(() => {});
-    });
   </script>
 </body>
 </html>
