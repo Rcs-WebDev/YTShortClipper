@@ -1,0 +1,39 @@
+# ==========================================
+# YTShortClipper .gitignore
+# ==========================================
+
+# 🚫 Executable Binaries & Large Files (> 100MB rejected by GitHub)
+*.apk
+*.aab
+*.exe
+*.dll
+*.so
+*.dylib
+*.task
+bin/
+ffmpeg/
+MicrosoftEdgeWebview2Setup.exe
+YTShortClipper-Update-v1.0.7.apk
+
+# 📱 Flutter & Dart build artifacts
+**/build/
+**/.gradle/
+**/.dart_tool/
+mobile_app/.flutter-plugins
+mobile_app/.flutter-plugins-dependencies
+mobile_app/.packages
+mobile_app/.pub-cache/
+mobile_app/.pub/
+
+# 🤖 Android build artifacts
+mobile_app/android/local.properties
+mobile_app/android/captures/
+
+# 💻 IDE & System
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db

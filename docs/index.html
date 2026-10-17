@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>YTShortClipper — AI-Powered YouTube Short Clipper & Video Studio</title>
+  <meta name="description" content="Aplikasi pembuat video YouTube Shorts, TikTok, dan Reels otomatis bertenaga AI dengan On-Device Speech Transcriber, Highlight Detector, dan Pre-Render Studio.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #090D16;
+      --card-bg: rgba(22, 29, 47, 0.7);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --primary: #FF4500;
+      --primary-hover: #FF5722;
+      --accent: #6366F1;
+      --accent-glow: rgba(99, 102, 241, 0.25);
+      --text: #F8FAFC;
+      --text-muted: #94A3B8;
+      --success: #10B981;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      overflow-x: hidden;
+      background-image: 
+        radial-gradient(circle at 15% 15%, rgba(255, 69, 0, 0.12) 0%, transparent 40%),
+        radial-gradient(circle at 85% 35%, rgba(99, 102, 241, 0.15) 0%, transparent 45%),
+        radial-gradient(circle at 50% 80%, rgba(244, 63, 94, 0.1) 0%, transparent 50%);
+      background-attachment: fixed;
+    }
+
+    /* Container */
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* Navbar */
+    nav {
+      padding: 24px 0;
+      border-bottom: 1px solid var(--card-border);
+      backdrop-filter: blur(12px);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(9, 13, 22, 0.85);
+    }
+    .nav-inner {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+      color: white;
+      font-weight: 800;
+      font-size: 20px;
+      font-family: 'Space Grotesk', sans-serif;
+    }
+    .logo-badge {
+      background: linear-gradient(135deg, #FF4500, #FF1744);
+      padding: 6px 10px;
+      border-radius: 10px;
+      font-size: 14px;
+      box-shadow: 0 4px 14px rgba(255, 69, 0, 0.4);
+    }
+    .nav-links {
+      display: flex;
+      gap: 20px;
+      align-items: center;
+    }
+    .nav-links a {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 600;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover {
+      color: white;
+    }
+    .nav-btn {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid var(--card-border);
+      padding: 8px 18px;
+      border-radius: 999px;
+      color: white !important;
+      font-size: 13px !important;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .nav-btn:hover {
+      background: rgba(255, 255, 255, 0.15);
+    }
+
+    /* Hero */
+    .hero {
+      padding: 80px 0 60px;
+      text-align: center;
+      position: relative;
+    }
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(255, 69, 0, 0.12);
+      border: 1px solid rgba(255, 69, 0, 0.3);
+      padding: 6px 16px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 700;
+      color: #FF7043;
+      margin-bottom: 24px;
+    }
+    .tag-pulse {
+      width: 8px;
+      height: 8px;
+      background: #FF4500;
+      border-radius: 50%;
+      box-shadow: 0 0 10px #FF4500;
+      animation: pulse 1.8s infinite;
+    }
+    @keyframes pulse {
+      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(255, 69, 0, 0.7); }
+      70% { transform: scale(1); box-shadow: 0 0 0 8px rgba(255, 69, 0, 0); }
+      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(255, 69, 0, 0); }
+    }
+    .hero h1 {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: clamp(34px, 5.5vw, 64px);
+      line-height: 1.15;
+      font-weight: 800;
+      letter-spacing: -1px;
+      margin-bottom: 24px;
+      max-width: 900px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .gradient-text {
+      background: linear-gradient(135deg, #FF6B4A 0%, #FF2E54 50%, #A855F7 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .hero p {
+      font-size: 18px;
+      color: var(--text-muted);
+      max-width: 680px;
+      margin: 0 auto 36px;
+      line-height: 1.7;
+    }
+    .cta-group {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-bottom: 48px;
+    }
+    .btn {
+      padding: 14px 28px;
+      border-radius: 12px;
+      font-weight: 700;
+      font-size: 15px;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      transition: all 0.25s ease;
+      cursor: pointer;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #FF4500, #E11D48);
+      color: white;
+      box-shadow: 0 8px 24px rgba(255, 69, 0, 0.35);
+      border: none;
+    }
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 30px rgba(255, 69, 0, 0.5);
+    }
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.05);
+      color: white;
+      border: 1px solid var(--card-border);
+      backdrop-filter: blur(8px);
+    }
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.12);
+      transform: translateY(-2px);
+    }
+
+    /* Mockup Showcase */
+    .showcase-wrapper {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 16px;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--card-border);
+      border-radius: 24px;
+      box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(16px);
+      position: relative;
+    }
+    .mockup-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-bottom: 14px;
+      margin-bottom: 14px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .mockup-dots {
+      display: flex;
+      gap: 6px;
+    }
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+    .dot.red { background: #FF5F56; }
+    .dot.yellow { background: #FFBD2E; }
+    .dot.green { background: #27C93F; }
+    .mockup-title {
+      font-size: 12px;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+    .mockup-body {
+      background: #0B1120;
+      border-radius: 16px;
+      padding: 32px 24px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 20px;
+      text-align: left;
+    }
+    .stat-pill {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      padding: 16px;
+      border-radius: 14px;
+    }
+    .stat-pill h4 {
+      font-size: 13px;
+      color: var(--text-muted);
+      font-weight: 500;
+      margin-bottom: 6px;
+    }
+    .stat-pill p {
+      font-size: 20px;
+      font-weight: 800;
+      color: white;
+      margin: 0;
+    }
+
+    /* Features Grid */
+    .features {
+      padding: 90px 0;
+    }
+    .section-title {
+      text-align: center;
+      margin-bottom: 56px;
+    }
+    .section-title h2 {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 36px;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+    .section-title p {
+      color: var(--text-muted);
+      font-size: 16px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 24px;
+    }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      padding: 32px;
+      border-radius: 20px;
+      backdrop-filter: blur(12px);
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+    .card:hover {
+      transform: translateY(-4px);
+      border-color: rgba(255, 69, 0, 0.3);
+      box-shadow: 0 16px 36px rgba(0, 0, 0, 0.4);
+    }
+    .card-icon {
+      width: 52px;
+      height: 52px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, rgba(255, 69, 0, 0.15), rgba(99, 102, 241, 0.15));
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      margin-bottom: 20px;
+    }
+    .card h3 {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+    .card p {
+      color: var(--text-muted);
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    /* Comparison / Specs */
+    .specs-section {
+      padding: 60px 0 90px;
+    }
+    .spec-table-box {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 20px;
+      padding: 32px;
+      backdrop-filter: blur(12px);
+      overflow-x: auto;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+    }
+    th, td {
+      padding: 16px 20px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      font-size: 14px;
+    }
+    th {
+      color: var(--text-muted);
+      font-weight: 600;
+      text-transform: uppercase;
+      font-size: 12px;
+      letter-spacing: 1px;
+    }
+    td.feature-name {
+      font-weight: 600;
+      color: white;
+    }
+    .badge-check {
+      color: var(--success);
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* Download Banner */
+    .download-banner {
+      background: linear-gradient(135deg, rgba(255, 69, 0, 0.15), rgba(99, 102, 241, 0.15));
+      border: 1px solid rgba(255, 69, 0, 0.3);
+      padding: 56px 36px;
+      border-radius: 28px;
+      text-align: center;
+      margin-bottom: 90px;
+      backdrop-filter: blur(16px);
+    }
+    .download-banner h2 {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 34px;
+      margin-bottom: 14px;
+    }
+    .download-banner p {
+      color: var(--text-muted);
+      font-size: 16px;
+      max-width: 600px;
+      margin: 0 auto 32px;
+    }
+
+    /* Footer */
+    footer {
+      border-top: 1px solid var(--card-border);
+      padding: 36px 0;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+
+    @media (max-width: 768px) {
+      .hero { padding: 50px 0 30px; }
+      .cta-group { flex-direction: column; }
+      .btn { width: 100%; justify-content: center; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Navigation -->
+  <nav>
+    <div class="container nav-inner">
+      <a href="#" class="logo">
+        <span class="logo-badge">⚡ YT</span>
+        YTShortClipper
+      </a>
+      <div class="nav-links">
+        <a href="#features">Fitur</a>
+        <a href="#specs">Perbandingan</a>
+        <a href="https://github.com/Rcs-WebDev/YTShortClipper" class="nav-btn" target="_blank" rel="noopener">
+          <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+          GitHub
+        </a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero Section -->
+  <header class="hero">
+    <div class="container">
+      <div class="tag">
+        <span class="tag-pulse"></span>
+        Versi 1.0.7 Update Dirilis • 100% Offline AI
+      </div>
+      <h1>
+        Ubah Video Panjang Jadi <span class="gradient-text">Shorts & TikTok Viral</span> Dalam Detik
+      </h1>
+      <p>
+        AI Short Clipper generasi baru dengan On-Device Neural Speech Recognizer, Pre-Render Studio Editor, Auto Dynamic Captions, dan zero API token.
+      </p>
+      <div class="cta-group">
+        <a href="https://github.com/Rcs-WebDev/YTShortClipper/releases" class="btn btn-primary" target="_blank" rel="noopener">
+          <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+          Unduh APK (v1.0.7)
+        </a>
+        <a href="https://github.com/Rcs-WebDev/YTShortClipper" class="btn btn-secondary" target="_blank" rel="noopener">
+          <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>
+          Source Code di GitHub
+        </a>
+      </div>
+
+      <!-- App Highlights Showcase -->
+      <div class="showcase-wrapper">
+        <div class="mockup-header">
+          <div class="mockup-dots">
+            <span class="dot red"></span>
+            <span class="dot yellow"></span>
+            <span class="dot green"></span>
+          </div>
+          <div class="mockup-title">YTShortClipper Studio Pro • Android App</div>
+          <div style="width: 40px;"></div>
+        </div>
+        <div class="mockup-body">
+          <div class="stat-pill">
+            <h4>🎙️ Speech Engine</h4>
+            <p>100% Offline</p>
+          </div>
+          <div class="stat-pill">
+            <h4>🔑 API Key</h4>
+            <p>Tanpa Token</p>
+          </div>
+          <div class="stat-pill">
+            <h4>⚡ Timing Kata</h4>
+            <p>Word-by-Word</p>
+          </div>
+          <div class="stat-pill">
+            <h4>🎬 Render Studio</h4>
+            <p>Full 9:16 Shorts</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Features Grid -->
+  <section id="features" class="features">
+    <div class="container">
+      <div class="section-title">
+        <h2>Fitur Unggulan Studio AI</h2>
+        <p>Dirancang untuk kreator konten YouTube Shorts, TikTok, dan Instagram Reels</p>
+      </div>
+
+      <div class="grid">
+        <div class="card">
+          <div class="card-icon">⚡</div>
+          <h3>AI Highlight & Virality Scoring</h3>
+          <p>Mendeteksi secara otomatis momen paling menarik dari video panjang menggunakan densitas emosi kata kunci naratif serta analisis retensi audiens.</p>
+        </div>
+
+        <div class="card">
+          <div class="card-icon">🎙️</div>
+          <h3>Local On-Device AI Caption Maker</h3>
+          <p>Engine neural speech recognition terintegrasi (Sherpa-ONNX Whisper int8) yang mengekstrak kata demi kata langsung dari audio video secara 100% offline tanpa perlu API key.</p>
+        </div>
+
+        <div class="card">
+          <div class="card-icon">🎨</div>
+          <h3>Pre-Render Studio Editor</h3>
+          <p>Edit sebelum render: atur font preset (BEAST, Retro, Bold), ukuran font subtitle dari 5px, posisi watermark dinamis, dan Hook Headline Banner animasi.</p>
+        </div>
+
+        <div class="card">
+          <div class="card-icon">📐</div>
+          <h3>Komposisi Vertikal Dinamis</h3>
+          <p>Potong video secara proporsional ke 9:16 layar penuh, split screen, atau fit-to-screen dengan kontrol crop geser yang presisi.</p>
+        </div>
+
+        <div class="card">
+          <div class="card-icon">🎬</div>
+          <h3>Dual Transition Engine</h3>
+          <p>Dua jenis transisi terpisah: transisi animasi subtitle kata (fade, wipe, zoom) dan transisi efek video utama pada menit-menit krusial.</p>
+        </div>
+
+        <div class="card">
+          <div class="card-icon">📱</div>
+          <h3>Dua Sumber Video</h3>
+          <p>Bisa mengambil video langsung dari tautan link YouTube (lengkap dengan closed-caption) maupun upload langsung dari Galeri HP Anda.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Comparison Table -->
+  <section id="specs" class="specs-section">
+    <div class="container">
+      <div class="section-title">
+        <h2>Kenapa Memilih YTShortClipper?</h2>
+        <p>Bandingkan kemudahan YTShortClipper dengan tools clipper konvensional</p>
+      </div>
+
+      <div class="spec-table-box">
+        <table>
+          <thead>
+            <tr>
+              <th>Fitur Utama</th>
+              <th>YTShortClipper</th>
+              <th>Tools Berbayar Lain</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="feature-name">Biaya & Token</td>
+              <td><span class="badge-check">✓ 100% Gratis & Bebas Token</span></td>
+              <td>❌ Berlangganan bulanan / Beli Token</td>
+            </tr>
+            <tr>
+              <td class="feature-name">API Key Eksternal</td>
+              <td><span class="badge-check">✓ Tidak Perlu API Key</span></td>
+              <td>❌ Wajib konfigurasi API Key</td>
+            </tr>
+            <tr>
+              <td class="feature-name">Pemrosesan Audio</td>
+              <td><span class="badge-check">✓ On-Device Neural Speech</span></td>
+              <td>❌ Harus upload ke cloud server</td>
+            </tr>
+            <tr>
+              <td class="feature-name">Studio Editor Sebelum Render</td>
+              <td><span class="badge-check">✓ Full Studio Pre-Render</span></td>
+              <td>❌ Langsung render tanpa review</td>
+            </tr>
+            <tr>
+              <td class="feature-name">Privasi Video</td>
+              <td><span class="badge-check">✓ 100% Aman di Perangkat Anda</span></td>
+              <td>❌ Video diunggah ke pihak ketiga</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- Download Banner -->
+  <section class="container">
+    <div class="download-banner">
+      <h2>Mulai Klip Video Anda Sekarang</h2>
+      <p>Pasang langsung file APK di smartphone Android Anda dan nikmati fitur AI Short Clipper tanpa batas.</p>
+      <a href="https://github.com/Rcs-WebDev/YTShortClipper/releases" class="btn btn-primary" target="_blank" rel="noopener">
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+        Unduh APK Rilis Terbaru
+      </a>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <p>© 2026 YTShortClipper by Rcs-WebDev. Open-source under MIT License.</p>
+      <p style="margin-top: 6px;">Dibangun dengan Flutter, Sherpa-ONNX, and FFmpeg.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

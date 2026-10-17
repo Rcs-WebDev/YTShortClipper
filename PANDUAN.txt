@@ -1,0 +1,65 @@
+﻿PANDUAN SINGKAT YT SHORT CLIPPER V2
+====================================
+
+1. CARA MENJALANKAN
+-------------------
+Double-click file "run.bat".
+Pada pertama kali menjalankan, Windows mungkin akan menginstall WebView2 Runtime
+dan membutuhkan koneksi internet. Tunggu sampai selesai.
+
+Jika muncul error "Could not find the webview2 runtime":
+- Pastikan PC terhubung internet saat pertama kali menjalankan run.bat
+- Atau install manual dengan double-click "MicrosoftEdgeWebview2Setup.exe",
+  lalu jalankan "yt-short-clipper-v2.exe"
+
+
+2. SETUP COOKIES YOUTUBE
+------------------------
+Aplikasi ini membutuhkan cookies YouTube untuk mengambil data video.
+
+Cara mendapatkan cookies.txt:
+1. Buka YouTube di browser (Chrome/Edge/Firefox) dan pastikan sudah login
+2. Install extension "Get cookies.txt LOCALLY" di browser
+3. Buka extension tersebut saat berada di youtube.com
+4. Klik "Export" atau "Copy" cookies
+5. Di aplikasi, klik "Upload YouTube cookies to continue"
+6. Pilih file cookies.txt yang sudah dieksport
+
+Tips:
+- Jangan logout dari YouTube setelah mengekspor cookies
+- Jika sering gagal download (error 403), export ulang cookies yang baru
+- Pastikan cookies berisi SID, HSID, SSID, APISID, SAPISID, LOGIN_INFO
+
+
+3. SETUP AI / OPENAI
+--------------------
+Aplikasi menggunakan AI untuk mendeteksi bagian menarik dari video.
+
+1. Buka menu Settings -> AI Models
+2. Pilih provider AI (OpenAI atau provider kompatibel OpenAI)
+3. Masukkan API Key
+4. Pilih model yang ingin digunakan (contoh: gpt-4o-mini, gpt-4o)
+5. Klik Save
+
+Untuk provider selain OpenAI:
+- Masukkan Base URL API provider tersebut
+- Pilih/model yang tersedia di provider tersebut
+
+
+4. TROUBLESHOOTING
+------------------
+- Error "ffmpeg is not installed": pastikan folder ffmpeg tidak dihapus
+dari hasil ekstrak zip.
+
+- Error "cookies validation failed": export ulang cookies.txt dari YouTube.
+
+- Aplikasi lambat saat processing: proses clip membutuhkan waktu tergantung
+panjang video, kualitas, dan spesifikasi PC.
+
+
+5. CATATAN
+----------
+Aplikasi ini adalah versi portable. Tidak perlu diinstall.
+Cukup ekstrak zip dan jalankan run.bat.
+
+Versi: 2.0.7-beta
