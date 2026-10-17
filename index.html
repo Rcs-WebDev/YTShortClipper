@@ -1,0 +1,1390 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>YTShortClipper Studio — AI Short Clipper & Video Studio</title>
+  <meta name="description" content="Live Interactive Web Studio YTShortClipper: Potong video panjang jadi YouTube Shorts, TikTok & Reels dengan subtitle kata-demi-kata dinamis & On-Device AI.">
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Anton&family=Bebas+Neue&family=Montserrat:ital,wght@0,700;0,900;1,700;1,900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Poppins:wght@600;800;900&family=Space+Grotesk:wght@600;700;800&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --bg: #090D16;
+      --panel-bg: rgba(15, 23, 42, 0.85);
+      --card-bg: rgba(30, 41, 59, 0.6);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --primary: #FF4500;
+      --primary-hover: #FF5722;
+      --accent: #6366F1;
+      --accent-glow: rgba(99, 102, 241, 0.35);
+      --text: #F8FAFC;
+      --text-muted: #94A3B8;
+      --success: #10B981;
+      --warning: #F59E0B;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+    }
+
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      overflow-x: hidden;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background-image: 
+        radial-gradient(circle at 10% 20%, rgba(255, 69, 0, 0.12) 0%, transparent 35%),
+        radial-gradient(circle at 90% 40%, rgba(99, 102, 241, 0.15) 0%, transparent 40%),
+        radial-gradient(circle at 50% 90%, rgba(244, 63, 94, 0.08) 0%, transparent 45%);
+      background-attachment: fixed;
+    }
+
+    /* Top Studio Header */
+    header {
+      background: rgba(15, 23, 42, 0.95);
+      border-bottom: 1px solid var(--card-border);
+      backdrop-filter: blur(16px);
+      padding: 12px 24px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .brand-wrap {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .logo-badge {
+      background: linear-gradient(135deg, #FF4500, #E11D48);
+      padding: 6px 12px;
+      border-radius: 10px;
+      font-family: 'Space Grotesk', sans-serif;
+      font-weight: 800;
+      font-size: 14px;
+      letter-spacing: 0.5px;
+      color: white;
+      box-shadow: 0 4px 14px rgba(255, 69, 0, 0.4);
+    }
+
+    .title-group h1 {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 17px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .title-group p {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .icon-btn {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--card-border);
+      color: var(--text);
+      width: 38px;
+      height: 38px;
+      border-radius: 10px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .icon-btn:hover {
+      background: rgba(255, 255, 255, 0.12);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .icon-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .apk-download-btn {
+      background: linear-gradient(135deg, #FF4500, #E11D48);
+      color: white;
+      text-decoration: none;
+      font-weight: 700;
+      font-size: 13px;
+      padding: 9px 18px;
+      border-radius: 10px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 4px 16px rgba(255, 69, 0, 0.35);
+      transition: all 0.2s;
+    }
+
+    .apk-download-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 22px rgba(255, 69, 0, 0.5);
+    }
+
+    /* Main Studio Workspace */
+    .studio-container {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 460px 1fr;
+      gap: 20px;
+      padding: 20px 24px;
+      max-width: 1480px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    /* Left: Live Preview Canvas */
+    .preview-column {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .phone-mockup-wrapper {
+      background: #000;
+      border-radius: 36px;
+      padding: 12px;
+      border: 2px solid rgba(255, 255, 255, 0.12);
+      box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.8), 0 0 40px rgba(99, 102, 241, 0.15);
+      position: relative;
+    }
+
+    .phone-notch {
+      width: 90px;
+      height: 18px;
+      background: #000;
+      border-radius: 0 0 14px 14px;
+      position: absolute;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 50;
+    }
+
+    .canvas-viewport {
+      width: 100%;
+      aspect-ratio: 9 / 16;
+      background: #050811;
+      border-radius: 28px;
+      overflow: hidden;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Video Player Element */
+    .canvas-video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transform: scale(1);
+      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .canvas-video.punch-in {
+      transform: scale(1.18);
+    }
+
+    /* Top Hook Headline Banner */
+    .hook-banner {
+      position: absolute;
+      top: 36px;
+      left: 16px;
+      right: 16px;
+      background: #E11D48;
+      color: white;
+      font-weight: 900;
+      font-size: 14px;
+      text-transform: uppercase;
+      text-align: center;
+      padding: 8px 12px;
+      border-radius: 8px;
+      letter-spacing: 0.5px;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.6);
+      z-index: 30;
+      transition: all 0.25s;
+    }
+
+    /* Live Subtitle Overlay */
+    .subtitle-overlay-box {
+      position: absolute;
+      left: 18px;
+      right: 18px;
+      text-align: center;
+      z-index: 35;
+      pointer-events: none;
+      transition: all 0.2s ease;
+    }
+
+    .subtitle-text {
+      display: inline-block;
+      line-height: 1.25;
+      word-break: break-word;
+      transition: all 0.15s ease;
+    }
+
+    .word-token {
+      display: inline-block;
+      padding: 0 3px;
+      transition: color 0.15s, transform 0.15s;
+    }
+
+    .word-token.active {
+      transform: scale(1.12);
+      font-weight: 900;
+    }
+
+    /* Watermark Badge */
+    .watermark-badge {
+      position: absolute;
+      bottom: 24px;
+      left: 20px;
+      color: rgba(255, 255, 255, 0.65);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      z-index: 30;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+    }
+
+    /* Player Controls Bar */
+    .player-controls {
+      background: var(--panel-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 12px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .scrubber-wrap {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .time-label {
+      font-family: monospace;
+      font-size: 12px;
+      color: var(--text-muted);
+      min-width: 42px;
+    }
+
+    .slider-track {
+      flex: 1;
+      accent-color: var(--primary);
+      height: 6px;
+      cursor: pointer;
+    }
+
+    .ctrl-buttons {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .ctrl-group-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .play-btn {
+      background: var(--primary);
+      color: white;
+      border: none;
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: 0 4px 14px rgba(255, 69, 0, 0.4);
+      transition: all 0.2s;
+    }
+
+    .play-btn:hover {
+      transform: scale(1.05);
+      background: var(--primary-hover);
+    }
+
+    /* Right: Studio Tools Panel */
+    .tools-column {
+      background: var(--panel-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 24px;
+      backdrop-filter: blur(16px);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      min-height: 640px;
+    }
+
+    /* Tab Navigation */
+    .tab-bar {
+      display: flex;
+      background: rgba(9, 13, 22, 0.6);
+      border-bottom: 1px solid var(--card-border);
+      padding: 6px;
+      overflow-x: auto;
+    }
+
+    .tab-item {
+      flex: 1;
+      padding: 12px 16px;
+      text-align: center;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-muted);
+      cursor: pointer;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      white-space: nowrap;
+      transition: all 0.2s;
+    }
+
+    .tab-item:hover {
+      color: white;
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .tab-item.active {
+      color: var(--primary);
+      background: rgba(255, 69, 0, 0.12);
+      border: 1px solid rgba(255, 69, 0, 0.25);
+    }
+
+    /* Tab Panes */
+    .tab-content {
+      flex: 1;
+      padding: 24px;
+      overflow-y: auto;
+    }
+
+    .tab-pane {
+      display: none;
+      flex-direction: column;
+      gap: 20px;
+      animation: fadeIn 0.2s ease;
+    }
+
+    .tab-pane.active {
+      display: flex;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Cards & Controls inside Tabs */
+    .section-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 18px;
+    }
+
+    .card-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: white;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    /* Font Presets Grid */
+    .preset-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 10px;
+    }
+
+    .preset-btn {
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 14px 10px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .preset-btn:hover {
+      border-color: rgba(255, 69, 0, 0.4);
+      transform: translateY(-2px);
+    }
+
+    .preset-btn.active {
+      border: 2px solid var(--primary);
+      background: rgba(255, 69, 0, 0.15);
+    }
+
+    .preset-preview-text {
+      font-size: 18px;
+      font-weight: 900;
+      margin-bottom: 6px;
+    }
+
+    .preset-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+
+    /* Slider Row */
+    .slider-row {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+
+    .slider-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .slider-value {
+      color: white;
+      font-weight: 700;
+    }
+
+    /* Color Swatches */
+    .color-swatches {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .color-dot {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      cursor: pointer;
+      border: 2px solid transparent;
+      transition: transform 0.15s;
+    }
+
+    .color-dot:hover {
+      transform: scale(1.15);
+    }
+
+    .color-dot.active {
+      border-color: white;
+      box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+    }
+
+    /* Caption Generator Banner */
+    .generator-banner {
+      background: linear-gradient(135deg, rgba(255, 69, 0, 0.15), rgba(99, 102, 241, 0.15));
+      border: 1px solid rgba(255, 69, 0, 0.3);
+      border-radius: 16px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .gen-btn {
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 12px;
+      border-radius: 10px;
+      font-weight: 700;
+      font-size: 14px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: all 0.2s;
+    }
+
+    .gen-btn:hover {
+      background: var(--primary-hover);
+      box-shadow: 0 4px 16px rgba(255, 69, 0, 0.4);
+    }
+
+    /* Subtitle Line Rows */
+    .subs-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-height: 280px;
+      overflow-y: auto;
+    }
+
+    .sub-item {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      padding: 12px 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .sub-item:hover, .sub-item.active {
+      border-color: rgba(255, 69, 0, 0.4);
+      background: rgba(255, 69, 0, 0.08);
+    }
+
+    .sub-time {
+      font-family: monospace;
+      font-size: 11px;
+      color: var(--primary);
+      font-weight: 700;
+    }
+
+    .sub-text-preview {
+      font-size: 13px;
+      font-weight: 600;
+      color: white;
+      margin-top: 2px;
+    }
+
+    /* Switch toggle */
+    .toggle-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .toggle-row:last-child {
+      border-bottom: none;
+    }
+
+    .toggle-label {
+      font-size: 13px;
+      font-weight: 600;
+      color: white;
+    }
+
+    .toggle-desc {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 44px;
+      height: 24px;
+    }
+
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .slider-switch {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: rgba(255, 255, 255, 0.1);
+      transition: .25s;
+      border-radius: 24px;
+      border: 1px solid var(--card-border);
+    }
+
+    .slider-switch:before {
+      position: absolute;
+      content: "";
+      height: 18px;
+      width: 18px;
+      left: 2px;
+      bottom: 2px;
+      background-color: white;
+      transition: .25s;
+      border-radius: 50%;
+    }
+
+    input:checked + .slider-switch {
+      background-color: var(--primary);
+      border-color: var(--primary);
+    }
+
+    input:checked + .slider-switch:before {
+      transform: translateX(20px);
+    }
+
+    /* Modal Progress Simulation */
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(8px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 200;
+    }
+
+    .modal-overlay.open {
+      display: flex;
+    }
+
+    .progress-box {
+      background: #0F172A;
+      border: 1px solid var(--card-border);
+      border-radius: 20px;
+      padding: 32px 28px;
+      width: 90%;
+      max-width: 420px;
+      text-align: center;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
+    }
+
+    .spinner {
+      width: 48px;
+      height: 48px;
+      border: 4px solid rgba(255, 69, 0, 0.2);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 20px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Responsive */
+    @media (max-width: 980px) {
+      .studio-container {
+        grid-template-columns: 1fr;
+      }
+      .preview-column {
+        max-width: 420px;
+        margin: 0 auto;
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Studio Navigation Bar -->
+  <header>
+    <div class="brand-wrap">
+      <span class="logo-badge">⚡ YT</span>
+      <div class="title-group">
+        <h1>YTShortClipper Studio Pro <span style="font-size: 11px; background: rgba(99,102,241,0.2); color:#A5B4FC; padding: 2px 8px; border-radius: 6px;">Web Live Edition</span></h1>
+        <p>Interactive Video Editor • On-Device AI Caption & Multi-Track Studio</p>
+      </div>
+    </div>
+
+    <div class="header-actions">
+      <!-- Undo / Redo -->
+      <button class="icon-btn" id="btnUndo" title="Undo" onclick="undoAction()">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 10h10a5 5 0 0 1 5 5v2m-15-7l4-4m-4 4l4 4"/></svg>
+      </button>
+      <button class="icon-btn" id="btnRedo" title="Redo" onclick="redoAction()">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 10H11a5 5 0 0 0-5 5v2m15-7l-4-4m4 4l-4 4"/></svg>
+      </button>
+
+      <!-- Download APK Button -->
+      <a href="https://github.com/Rcs-WebDev/YTShortClipper/releases" class="apk-download-btn" target="_blank" rel="noopener">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+        Pasang di HP (Download APK v1.0.7)
+      </a>
+    </div>
+  </header>
+
+  <!-- Studio Workspace -->
+  <main class="studio-container">
+
+    <!-- Left Column: 9:16 Shorts Canvas Preview -->
+    <div class="preview-column">
+      <div class="phone-mockup-wrapper">
+        <div class="phone-notch"></div>
+        <div class="canvas-viewport" id="viewport">
+          
+          <!-- Sample Video Element -->
+          <video id="videoPlayer" class="canvas-video" playsinline loop muted>
+            <!-- High quality royalty-free vertical talking-head video -->
+            <source src="https://assets.mixkit.co/videos/preview/mixkit-young-man-talking-to-camera-in-a-video-call-41132-large.mp4" type="video/mp4">
+          </video>
+
+          <!-- Hook Headline Banner -->
+          <div class="hook-banner" id="hookBanner">JANGAN SKIP! RAHASIA PENTING 🔥</div>
+
+          <!-- Live Dynamic Subtitle Overlay -->
+          <div class="subtitle-overlay-box" id="subtitleBox" style="bottom: 70px;">
+            <div class="subtitle-text" id="subtitleText">
+              <span class="word-token">RAHASIA</span>
+              <span class="word-token active">SUKSES</span>
+              <span class="word-token">YOUTUBE</span>
+              <span class="word-token">SHORTS</span>
+            </div>
+          </div>
+
+          <!-- Dynamic Watermark -->
+          <div class="watermark-badge" id="watermarkBadge">@channelmu</div>
+        </div>
+      </div>
+
+      <!-- Player Controls -->
+      <div class="player-controls">
+        <div class="scrubber-wrap">
+          <span class="time-label" id="curTime">00:00</span>
+          <input type="range" class="slider-track" id="videoScrubber" min="0" max="15" step="0.1" value="0" oninput="seekVideo(this.value)">
+          <span class="time-label" id="totTime">00:15</span>
+        </div>
+
+        <div class="ctrl-buttons">
+          <div class="ctrl-group-left">
+            <button class="play-btn" id="playBtn" onclick="togglePlay()">
+              <svg id="playIcon" width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+            </button>
+            <button class="icon-btn" onclick="restartVideo()" title="Putar Ulang">
+              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+            </button>
+            <button class="icon-btn" id="muteBtn" onclick="toggleAudio()" title="Suara Video">
+              <svg id="volIcon" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/></svg>
+            </button>
+          </div>
+
+          <div style="font-size: 12px; color: var(--text-muted); font-weight: 600;">
+            Format: <span style="color: white;">9:16 Shorts</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Column: Interactive Studio Tools -->
+    <div class="tools-column">
+      
+      <!-- Tab Bar -->
+      <div class="tab-bar">
+        <div class="tab-item active" onclick="switchTab('styleTab', this)">
+          🎨 Gaya Subtitle
+        </div>
+        <div class="tab-item" onclick="switchTab('captionsTab', this)">
+          💬 Captions
+        </div>
+        <div class="tab-item" onclick="switchTab('aiToolsTab', this)">
+          ⚡ AI Tools
+        </div>
+        <div class="tab-item" onclick="switchTab('komposisiTab', this)">
+          📐 Komposisi
+        </div>
+      </div>
+
+      <!-- Tab Content Area -->
+      <div class="tab-content">
+        
+        <!-- ================= TAB 1: STYLE ================= -->
+        <div class="tab-pane active" id="styleTab">
+          
+          <!-- Preset Kartu Gaya Subtitle -->
+          <div class="section-card">
+            <div class="card-title">Preset Gaya Subtitle Populer</div>
+            <div class="preset-grid">
+              
+              <!-- BEAST Preset -->
+              <div class="preset-btn active" onclick="applyPreset('beast', this)">
+                <div class="preset-preview-text" style="font-family: 'Anton'; color: #FFF; -webkit-text-stroke: 1.5px #000; text-shadow: 2px 2px 0 #000; background: #FFD600; color: #000; padding: 2px 6px; border-radius: 4px;">BEAST</div>
+                <div class="preset-label">Trending #1</div>
+              </div>
+
+              <!-- Retro Neon Preset -->
+              <div class="preset-btn" onclick="applyPreset('retro', this)">
+                <div class="preset-preview-text" style="font-family: 'Bebas Neue'; color: #00FFCC; text-shadow: 0 0 10px #00FFCC;">RETRO</div>
+                <div class="preset-label">Neon Cyber</div>
+              </div>
+
+              <!-- Bold Impact Preset -->
+              <div class="preset-btn" onclick="applyPreset('bold', this)">
+                <div class="preset-preview-text" style="font-family: 'Montserrat'; color: #FFFFFF; -webkit-text-stroke: 1.8px #000;">IMPACT</div>
+                <div class="preset-label">Bold Clean</div>
+              </div>
+
+              <!-- Minimal Preset -->
+              <div class="preset-btn" onclick="applyPreset('minimal', this)">
+                <div class="preset-preview-text" style="font-family: 'Poppins'; color: #FFE600; font-weight: 800;">CLEAN</div>
+                <div class="preset-label">Podcast Minimal</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Typography & Font Family -->
+          <div class="section-card">
+            <div class="card-title">Kustomisasi Font & Ukuran</div>
+            
+            <div class="slider-row">
+              <div class="slider-header">
+                <span>Jenis Font (Google Fonts)</span>
+              </div>
+              <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;">
+                <button class="icon-btn" style="width: auto; font-family: 'Anton'; font-size: 15px;" onclick="setFontFamily('Anton')">Anton</button>
+                <button class="icon-btn" style="width: auto; font-family: 'Bebas Neue'; font-size: 16px;" onclick="setFontFamily('Bebas Neue')">Bebas</button>
+                <button class="icon-btn" style="width: auto; font-family: 'Montserrat'; font-size: 13px;" onclick="setFontFamily('Montserrat')">Monts</button>
+                <button class="icon-btn" style="width: auto; font-family: 'Poppins'; font-size: 13px;" onclick="setFontFamily('Poppins')">Poppins</button>
+              </div>
+            </div>
+
+            <!-- Ukuran Font (Rentang dari 5px sesuai request pengguna) -->
+            <div class="slider-row" style="margin-top: 14px;">
+              <div class="slider-header">
+                <span>Ukuran Font Subtitle (Bisa dari 5px)</span>
+                <span class="slider-value" id="fontSizeVal">24px</span>
+              </div>
+              <input type="range" class="slider-track" min="5" max="48" value="24" oninput="setFontSize(this.value)">
+            </div>
+
+            <!-- Posisi Subtitle -->
+            <div class="slider-row">
+              <div class="slider-header">
+                <span>Posisi Letak Subtitle</span>
+                <span class="slider-value" id="subPosVal">Bawah</span>
+              </div>
+              <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
+                <button class="icon-btn" style="width: auto;" onclick="setSubPosition('atas')">Atas</button>
+                <button class="icon-btn" style="width: auto;" onclick="setSubPosition('tengah')">Tengah</button>
+                <button class="icon-btn" style="width: auto; border-color: var(--primary); color: var(--primary);" onclick="setSubPosition('bawah')">Bawah</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Color Customizer -->
+          <div class="section-card">
+            <div class="card-title">Warna Highlight Kata Aktif</div>
+            <div class="color-swatches">
+              <div class="color-dot active" style="background: #FFE600;" onclick="setActiveWordColor('#FFE600', this)"></div>
+              <div class="color-dot" style="background: #00FFCC;" onclick="setActiveWordColor('#00FFCC', this)"></div>
+              <div class="color-dot" style="background: #FF2E54;" onclick="setActiveWordColor('#FF2E54', this)"></div>
+              <div class="color-dot" style="background: #00E676;" onclick="setActiveWordColor('#00E676', this)"></div>
+              <div class="color-dot" style="background: #FF9100;" onclick="setActiveWordColor('#FF9100', this)"></div>
+              <div class="color-dot" style="background: #FFFFFF;" onclick="setActiveWordColor('#FFFFFF', this)"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ================= TAB 2: CAPTIONS ================= -->
+        <div class="tab-pane" id="captionsTab">
+          
+          <!-- Generator Subtitle Otomatis -->
+          <div class="generator-banner">
+            <div style="display: flex; gap: 12px; align-items: center;">
+              <div style="width: 36px; height: 36px; background: var(--primary); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px;">⚡</div>
+              <div>
+                <h4 style="font-size: 14px; font-weight: 800;">AI Caption Maker Mandiri</h4>
+                <p style="font-size: 12px; color: var(--text-muted);">Ekstrak ucapan kata-demi-kata langsung tanpa token / API key</p>
+              </div>
+            </div>
+            <button class="gen-btn" onclick="simulateAiCaptionGeneration()">
+              <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+              Generate Subtitle Otomatis
+            </button>
+          </div>
+
+          <!-- Daftar Baris Subtitle -->
+          <div class="section-card">
+            <div class="card-title">
+              <span>Daftar Baris Subtitle (3)</span>
+              <button class="icon-btn" style="width: 28px; height: 28px;" title="Tambah Baris" onclick="addNewLine()">+</button>
+            </div>
+            
+            <div class="subs-list" id="subsListContainer">
+              <div class="sub-item active" onclick="selectSubtitleLine(0)">
+                <div>
+                  <div class="sub-time">00:00 - 00:04</div>
+                  <div class="sub-text-preview">RAHASIA SUKSES YOUTUBE SHORTS</div>
+                </div>
+                <span style="color: var(--primary); font-size: 18px;">▶</span>
+              </div>
+
+              <div class="sub-item" onclick="selectSubtitleLine(1)">
+                <div>
+                  <div class="sub-time">00:04 - 00:08</div>
+                  <div class="sub-text-preview">JANGAN BUAT KONTEN MEMBOSANKAN</div>
+                </div>
+                <span style="color: var(--text-muted); font-size: 18px;">▶</span>
+              </div>
+
+              <div class="sub-item" onclick="selectSubtitleLine(2)">
+                <div>
+                  <div class="sub-time">00:08 - 00:15</div>
+                  <div class="sub-text-preview">PAKAI RETENSI HOOK DI 3 DETIK PERTAMA</div>
+                </div>
+                <span style="color: var(--text-muted); font-size: 18px;">▶</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Efek Transisi Subtitle -->
+          <div class="section-card">
+            <div class="card-title">Transisi Animasi Kata</div>
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
+              <button class="icon-btn" style="width: auto; border-color: var(--primary); color: var(--primary);" onclick="setTransition('fade')">Fade In</button>
+              <button class="icon-btn" style="width: auto;" onclick="setTransition('wipe')">Wipe</button>
+              <button class="icon-btn" style="width: auto;" onclick="setTransition('zoom')">Zoom In</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ================= TAB 3: AI TOOLS ================= -->
+        <div class="tab-pane" id="aiToolsTab">
+          <div class="section-card">
+            <div class="card-title">Alat Otomatisasi AI</div>
+            
+            <div class="toggle-row">
+              <div>
+                <div class="toggle-label">Auto Punch-In Dinamis</div>
+                <div class="toggle-desc">Zoom in otomatis pada kalimat penting untuk meningkatkan retensi</div>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="punchInToggle" checked onchange="togglePunchIn(this.checked)">
+                <span class="slider-switch"></span>
+              </label>
+            </div>
+
+            <div class="toggle-row">
+              <div>
+                <div class="toggle-label">Clean Speech AI</div>
+                <div class="toggle-desc">Jernihkan vokal suara dan hilangkan desis kebisingan latar</div>
+              </div>
+              <label class="switch">
+                <input type="checkbox" checked>
+                <span class="slider-switch"></span>
+              </label>
+            </div>
+
+            <div class="toggle-row">
+              <div>
+                <div class="toggle-label">Smart Narrative Cut</div>
+                <div class="toggle-desc">Hilangkan jeda nafas dan jeda hening pembicara secara presisi</div>
+              </div>
+              <label class="switch">
+                <input type="checkbox" checked>
+                <span class="slider-switch"></span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Hook Viral Rekomendasi -->
+          <div class="section-card">
+            <div class="card-title">AI Hook Headline Generator</div>
+            <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">Pilih hook headline terbaik yang langsung diterapkan pada banner atas:</p>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <button class="icon-btn" style="width: 100%; justify-content: flex-start; padding: 12px;" onclick="setHookText('JANGAN SKIP! RAHASIA PENTING 🔥')">
+                🔥 JANGAN SKIP! RAHASIA PENTING
+              </button>
+              <button class="icon-btn" style="width: 100%; justify-content: flex-start; padding: 12px;" onclick="setHookText('TERNYATA CARA INI YANG BIKIN VIRAL 😱')">
+                😱 TERNYATA CARA INI YANG BIKIN VIRAL
+              </button>
+              <button class="icon-btn" style="width: 100%; justify-content: flex-start; padding: 12px;" onclick="setHookText('STOP LAKUKAN KESALAHAN INI SEKARANG ⚡')">
+                ⚡ STOP LAKUKAN KESALAHAN INI SEKARANG
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ================= TAB 4: KOMPOSISI ================= -->
+        <div class="tab-pane" id="komposisiTab">
+          
+          <!-- Template Komposisi -->
+          <div class="section-card">
+            <div class="card-title">Template Komposisi Video</div>
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
+              <button class="icon-btn" style="width: auto; border-color: var(--primary); color: var(--primary);" onclick="setTemplate('fullscreen')">9:16 Full</button>
+              <button class="icon-btn" style="width: auto;" onclick="setTemplate('split')">Split</button>
+              <button class="icon-btn" style="width: auto;" onclick="setTemplate('fit')">Fit Video</button>
+            </div>
+
+            <!-- Framing Crop Slider -->
+            <div class="slider-row" style="margin-top: 16px;">
+              <div class="slider-header">
+                <span>Posisi Crop Wajah / Objek</span>
+                <span class="slider-value" id="cropPosVal">Tengah (50%)</span>
+              </div>
+              <input type="range" class="slider-track" min="0" max="100" value="50" oninput="setCropPosition(this.value)">
+            </div>
+          </div>
+
+          <!-- Watermark Setting -->
+          <div class="section-card">
+            <div class="card-title">Pengaturan Watermark</div>
+            <div class="slider-row">
+              <div class="slider-header">
+                <span>Teks Watermark Channel</span>
+              </div>
+              <input type="text" id="watermarkInput" value="@channelmu" style="background: rgba(15,23,42,0.8); border: 1px solid var(--card-border); color: white; padding: 10px 14px; border-radius: 10px; outline: none;" oninput="updateWatermark(this.value)">
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </main>
+
+  <!-- Simulation Modal Progress Dialog -->
+  <div class="modal-overlay" id="progressModal">
+    <div class="progress-box">
+      <div class="spinner"></div>
+      <h3 style="font-size: 16px; font-weight: 800; margin-bottom: 8px;" id="modalStatus">Menganalisis Gelombang Audio Video...</h3>
+      <p style="font-size: 12px; color: var(--text-muted); line-height: 1.6;" id="modalDetail">
+        Menyelaraskan ucapan kata-demi-kata via On-Device Neural Speech Engine (100% Offline Tanpa Token)...
+      </p>
+      <div style="margin-top: 18px; background: rgba(255,255,255,0.06); height: 8px; border-radius: 999px; overflow: hidden;">
+        <div id="modalBar" style="background: var(--primary); height: 100%; width: 25%; transition: width 0.3s;"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // State Studio
+    const state = {
+      isPlaying: false,
+      isMuted: true,
+      activeWordColor: '#FFE600',
+      fontSize: 24,
+      subPosition: 'bawah',
+      fontFamily: 'Anton',
+      hookText: 'JANGAN SKIP! RAHASIA PENTING 🔥',
+      watermark: '@channelmu',
+      activeLineIndex: 0,
+      lines: [
+        { start: 0, end: 4, text: ['RAHASIA', 'SUKSES', 'YOUTUBE', 'SHORTS'] },
+        { start: 4, end: 8, text: ['JANGAN', 'BUAT', 'KONTEN', 'MEMBOSANKAN'] },
+        { start: 8, end: 15, text: ['PAKAI', 'RETENSI', 'HOOK', '3 DETIK'] }
+      ],
+      history: [],
+      redoStack: []
+    };
+
+    const video = document.getElementById('videoPlayer');
+    const playBtn = document.getElementById('playBtn');
+    const playIcon = document.getElementById('playIcon');
+    const scrubber = document.getElementById('videoScrubber');
+    const curTimeLabel = document.getElementById('curTime');
+    const totTimeLabel = document.getElementById('totTime');
+    const subtitleBox = document.getElementById('subtitleBox');
+    const subtitleText = document.getElementById('subtitleText');
+    const hookBanner = document.getElementById('hookBanner');
+    const watermarkBadge = document.getElementById('watermarkBadge');
+
+    // Video events
+    video.addEventListener('loadedmetadata', () => {
+      scrubber.max = video.duration || 15;
+      totTimeLabel.innerText = formatTime(video.duration || 15);
+    });
+
+    video.addEventListener('timeupdate', () => {
+      scrubber.value = video.currentTime;
+      curTimeLabel.innerText = formatTime(video.currentTime);
+      updateLiveSubtitles(video.currentTime);
+    });
+
+    function formatTime(sec) {
+      const m = Math.floor(sec / 60).toString().padStart(2, '0');
+      const s = Math.floor(sec % 60).toString().padStart(2, '0');
+      return `${m}:${s}`;
+    }
+
+    function togglePlay() {
+      if (video.paused) {
+        video.play();
+        playIcon.innerHTML = '<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>';
+      } else {
+        video.pause();
+        playIcon.innerHTML = '<path d="M8 5v14l11-7z"/>';
+      }
+    }
+
+    function restartVideo() {
+      video.currentTime = 0;
+      video.play();
+    }
+
+    function toggleAudio() {
+      video.muted = !video.muted;
+      const volIcon = document.getElementById('volIcon');
+      if (video.muted) {
+        volIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/>';
+      } else {
+        volIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" d="M11 5L6 9H2v6h4l5 4V5z"/><path stroke-linecap="round" stroke-linejoin="round" d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/>';
+      }
+    }
+
+    function seekVideo(val) {
+      video.currentTime = val;
+    }
+
+    // Dynamic word-by-word subtitle rendering
+    function updateLiveSubtitles(time) {
+      let currentLine = state.lines.find(l => time >= l.start && time < l.end);
+      if (!currentLine) currentLine = state.lines[0];
+
+      const duration = currentLine.end - currentLine.start;
+      const relTime = time - currentLine.start;
+      const wordCount = currentLine.text.length;
+      const activeWordIndex = Math.floor((relTime / duration) * wordCount);
+
+      subtitleText.innerHTML = currentLine.text.map((word, idx) => {
+        const isActive = idx === activeWordIndex;
+        const color = isActive ? state.activeWordColor : '#FFFFFF';
+        return `<span class="word-token ${isActive ? 'active' : ''}" style="color: ${color}; font-family: '${state.fontFamily}'; font-size: ${state.fontSize}px;">${word}</span>`;
+      }).join(' ');
+
+      // Auto punch-in zoom effect simulation
+      if (document.getElementById('punchInToggle').checked) {
+        if (activeWordIndex === 1 || activeWordIndex === 2) {
+          video.classList.add('punch-in');
+        } else {
+          video.classList.remove('punch-in');
+        }
+      }
+    }
+
+    // Switch Studio Tab
+    function switchTab(tabId, el) {
+      document.querySelectorAll('.tab-item').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+      el.classList.add('active');
+      document.getElementById(tabId).classList.add('active');
+    }
+
+    // Font Presets
+    function applyPreset(type, el) {
+      saveSnapshot();
+      document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+      el.classList.add('active');
+
+      if (type === 'beast') {
+        state.fontFamily = 'Anton';
+        state.activeWordColor = '#FFE600';
+        state.fontSize = 26;
+        subtitleText.style.background = '#FFD600';
+        subtitleText.style.color = '#000';
+        subtitleText.style.padding = '4px 10px';
+        subtitleText.style.borderRadius = '6px';
+        subtitleText.style.webkitTextStroke = '1px #000';
+      } else if (type === 'retro') {
+        state.fontFamily = 'Bebas Neue';
+        state.activeWordColor = '#00FFCC';
+        state.fontSize = 32;
+        subtitleText.style.background = 'transparent';
+        subtitleText.style.textShadow = '0 0 12px #00FFCC';
+        subtitleText.style.webkitTextStroke = 'none';
+      } else if (type === 'bold') {
+        state.fontFamily = 'Montserrat';
+        state.activeWordColor = '#FF2E54';
+        state.fontSize = 22;
+        subtitleText.style.background = 'transparent';
+        subtitleText.style.textShadow = '2px 2px 0 #000';
+        subtitleText.style.webkitTextStroke = '1.5px #000';
+      } else if (type === 'minimal') {
+        state.fontFamily = 'Poppins';
+        state.activeWordColor = '#FFE600';
+        state.fontSize = 20;
+        subtitleText.style.background = 'rgba(0,0,0,0.6)';
+        subtitleText.style.padding = '4px 12px';
+        subtitleText.style.borderRadius = '8px';
+        subtitleText.style.textShadow = 'none';
+        subtitleText.style.webkitTextStroke = 'none';
+      }
+      updateLiveSubtitles(video.currentTime);
+    }
+
+    function setFontFamily(font) {
+      saveSnapshot();
+      state.fontFamily = font;
+      updateLiveSubtitles(video.currentTime);
+    }
+
+    function setFontSize(size) {
+      state.fontSize = size;
+      document.getElementById('fontSizeVal').innerText = size + 'px';
+      updateLiveSubtitles(video.currentTime);
+    }
+
+    function setSubPosition(pos) {
+      saveSnapshot();
+      state.subPosition = pos;
+      document.getElementById('subPosVal').innerText = pos.toUpperCase();
+      if (pos === 'atas') {
+        subtitleBox.style.top = '100px';
+        subtitleBox.style.bottom = 'auto';
+      } else if (pos === 'tengah') {
+        subtitleBox.style.top = '50%';
+        subtitleBox.style.bottom = 'auto';
+        subtitleBox.style.transform = 'translateY(-50%)';
+      } else {
+        subtitleBox.style.top = 'auto';
+        subtitleBox.style.bottom = '70px';
+        subtitleBox.style.transform = 'none';
+      }
+    }
+
+    function setActiveWordColor(color, el) {
+      saveSnapshot();
+      document.querySelectorAll('.color-dot').forEach(d => d.classList.remove('active'));
+      el.classList.add('active');
+      state.activeWordColor = color;
+      updateLiveSubtitles(video.currentTime);
+    }
+
+    function setHookText(text) {
+      saveSnapshot();
+      state.hookText = text;
+      hookBanner.innerText = text;
+    }
+
+    function updateWatermark(text) {
+      state.watermark = text;
+      watermarkBadge.innerText = text;
+    }
+
+    function setCropPosition(val) {
+      document.getElementById('cropPosVal').innerText = `${val}%`;
+      video.style.objectPosition = `${val}% center`;
+    }
+
+    function togglePunchIn(checked) {
+      if (!checked) video.classList.remove('punch-in');
+    }
+
+    // AI Caption Generator Simulation
+    function simulateAiCaptionGeneration() {
+      const modal = document.getElementById('progressModal');
+      const status = document.getElementById('modalStatus');
+      const detail = document.getElementById('modalDetail');
+      const bar = document.getElementById('modalBar');
+
+      modal.classList.add('open');
+      bar.style.width = '20%';
+
+      setTimeout(() => {
+        status.innerText = 'Mendeteksi Gelombang Vokal 16kHz...';
+        detail.innerText = 'Menjalankan engine Whisper On-Device tanpa API key...';
+        bar.style.width = '55%';
+      }, 700);
+
+      setTimeout(() => {
+        status.innerText = 'Menyusun Word-by-Word Timestamps...';
+        detail.innerText = 'Menyelaraskan 12 kata ke dalam 3 segmen Shorts...';
+        bar.style.width = '88%';
+      }, 1500);
+
+      setTimeout(() => {
+        bar.style.width = '100%';
+        modal.classList.remove('open');
+        video.currentTime = 0;
+        video.play();
+      }, 2100);
+    }
+
+    // Undo / Redo functionality
+    function saveSnapshot() {
+      state.history.push(JSON.stringify({
+        fontFamily: state.fontFamily,
+        fontSize: state.fontSize,
+        activeWordColor: state.activeWordColor,
+        subPosition: state.subPosition,
+        hookText: state.hookText
+      }));
+      state.redoStack = [];
+      updateUndoButtons();
+    }
+
+    function undoAction() {
+      if (state.history.length === 0) return;
+      const current = JSON.stringify({
+        fontFamily: state.fontFamily,
+        fontSize: state.fontSize,
+        activeWordColor: state.activeWordColor,
+        subPosition: state.subPosition,
+        hookText: state.hookText
+      });
+      state.redoStack.push(current);
+
+      const prev = JSON.parse(state.history.pop());
+      state.fontFamily = prev.fontFamily;
+      state.fontSize = prev.fontSize;
+      state.activeWordColor = prev.activeWordColor;
+      state.subPosition = prev.subPosition;
+      state.hookText = prev.hookText;
+      hookBanner.innerText = state.hookText;
+      updateLiveSubtitles(video.currentTime);
+      updateUndoButtons();
+    }
+
+    function redoAction() {
+      if (state.redoStack.length === 0) return;
+      const next = JSON.parse(state.redoStack.pop());
+      state.history.push(JSON.stringify({
+        fontFamily: state.fontFamily,
+        fontSize: state.fontSize,
+        activeWordColor: state.activeWordColor,
+        subPosition: state.subPosition,
+        hookText: state.hookText
+      }));
+      state.fontFamily = next.fontFamily;
+      state.fontSize = next.fontSize;
+      state.activeWordColor = next.activeWordColor;
+      state.subPosition = next.subPosition;
+      state.hookText = next.hookText;
+      hookBanner.innerText = state.hookText;
+      updateLiveSubtitles(video.currentTime);
+      updateUndoButtons();
+    }
+
+    function updateUndoButtons() {
+      document.getElementById('btnUndo').disabled = state.history.length === 0;
+      document.getElementById('btnRedo').disabled = state.redoStack.length === 0;
+    }
+
+    // Initialize playback
+    window.addEventListener('DOMContentLoaded', () => {
+      updateLiveSubtitles(0);
+      video.play().catch(() => {});
+    });
+  </script>
+</body>
+</html>
