@@ -1,19 +1,20 @@
 import 'dart:io';
 import 'dart:math' as math;
-import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:video_player/video_player.dart';
 import '../models/clip_model.dart';
 import '../models/layout_model.dart';
 import '../models/subtitle_style_model.dart';
+import '../services/ffmpeg_render_service.dart';
 
-class VideoCanvasPreview extends StatelessWidget {
+class VideoCanvasPreview extends StatefulWidget {
   final VideoPlayerController? controller;
   final LayoutConfig layout;
   final SubtitleStyleConfig subtitleStyle;
   final ClipSegment clip;
   final Duration currentPosition;
+  final bool hideOverlays;
 
   const VideoCanvasPreview({
     super.key,
@@ -22,7 +23,133 @@ class VideoCanvasPreview extends StatelessWidget {
     required this.subtitleStyle,
     required this.clip,
     required this.currentPosition,
+    this.hideOverlays = false,
   });
+
+  @override
+  State<VideoCanvasPreview> createState() => _VideoCanvasPreviewState();
+}
+
+class _VideoCanvasPreviewState extends State<VideoCanvasPreview> {
+  VideoPlayerController? _brollController;
+  String? _activeBrollVideoPath;
+  bool _isInitializingBroll = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _syncActiveBrollVideo();
+  }
+
+  @override
+  void didUpdateWidget(covariant VideoCanvasPreview oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final oldBroll = _getBrollAt(oldWidget.clip, oldWidget.currentPosition);
+    final newBroll = _getCurrentActiveBroll();
+    final playChanged = oldWidget.controller?.value.isPlaying != widget.controller?.value.isPlaying;
+
+    if (oldBroll?.id != newBroll?.id || playChanged) {
+      _syncActiveBrollVideo();
+    }
+  }
+
+  @override
+  void dispose() {
+    _brollController?.dispose();
+    super.dispose();
+  }
+
+  BrollItem? _getBrollAt(ClipSegment clip, Duration pos) {
+    for (int i = clip.brolls.length - 1; i >= 0; i--) {
+      final b = clip.brolls[i];
+      if (pos >= b.startTime && pos < b.endTime) {
+        return b;
+      }
+    }
+    return null;
+  }
+
+  BrollItem? _getCurrentActiveBroll() {
+    return _getBrollAt(widget.clip, widget.currentPosition);
+  }
+
+  Future<void> _syncActiveBrollVideo() async {
+    final activeBroll = _getCurrentActiveBroll();
+    if (activeBroll == null ||
+        activeBroll.filePath == null ||
+        !FFmpegRenderService.isVideoFilePath(activeBroll.filePath)) {
+      if (_brollController != null && _brollController!.value.isPlaying) {
+        _brollController!.pause();
+      }
+      _activeBrollVideoPath = null;
+      return;
+    }
+
+    final path = activeBroll.filePath!;
+    if (_activeBrollVideoPath != path && !_isInitializingBroll) {
+      _isInitializingBroll = true;
+      final oldCtrl = _brollController;
+      _brollController = null;
+      _activeBrollVideoPath = path;
+      await oldCtrl?.dispose();
+
+      try {
+        final file = File(path);
+        if (await file.exists()) {
+          final ctrl = VideoPlayerController.file(file);
+          await ctrl.initialize();
+          await ctrl.setVolume(0.0); // Mute B-roll video so main clip speech remains clear
+          await ctrl.setLooping(true);
+
+          final elapsed = widget.currentPosition - activeBroll.startTime;
+          if (!elapsed.isNegative) {
+            final vidDur = ctrl.value.duration;
+            final targetSeek = vidDur.inMilliseconds > 0
+                ? Duration(milliseconds: elapsed.inMilliseconds % vidDur.inMilliseconds)
+                : Duration.zero;
+            await ctrl.seekTo(targetSeek);
+          }
+
+          if (widget.controller?.value.isPlaying == true) {
+            await ctrl.play();
+          }
+
+          if (mounted && _activeBrollVideoPath == path) {
+            setState(() {
+              _brollController = ctrl;
+            });
+          } else {
+            await ctrl.dispose();
+          }
+        }
+      } catch (_) {
+        // Ignore initialization errors
+      } finally {
+        _isInitializingBroll = false;
+      }
+      return;
+    }
+
+    // Sync play/pause & position with main controller
+    if (_brollController != null && _brollController!.value.isInitialized) {
+      final mainPlaying = widget.controller?.value.isPlaying ?? false;
+      if (mainPlaying && !_brollController!.value.isPlaying) {
+        _brollController!.play();
+      } else if (!mainPlaying && _brollController!.value.isPlaying) {
+        _brollController!.pause();
+      }
+
+      final elapsed = widget.currentPosition - activeBroll.startTime;
+      final vidDur = _brollController!.value.duration;
+      if (!elapsed.isNegative && vidDur.inMilliseconds > 300) {
+        final expectedMs = elapsed.inMilliseconds % vidDur.inMilliseconds;
+        final actualMs = _brollController!.value.position.inMilliseconds;
+        if ((expectedMs - actualMs).abs() > 750) {
+          _brollController!.seekTo(Duration(milliseconds: expectedMs));
+        }
+      }
+    }
+  }
 
   TextStyle _getGoogleFontStyle({
     required double fontSize,
@@ -35,12 +162,12 @@ class VideoCanvasPreview extends StatelessWidget {
       color: foreground == null ? color : null,
       foreground: foreground,
       fontWeight: FontWeight.w900,
-      fontStyle: subtitleStyle.isItalic ? FontStyle.italic : FontStyle.normal,
+      fontStyle: widget.subtitleStyle.isItalic ? FontStyle.italic : FontStyle.normal,
       shadows: shadows,
       letterSpacing: 0.5,
     );
 
-    switch (subtitleStyle.fontFamily) {
+    switch (widget.subtitleStyle.fontFamily) {
       case SubtitleFontFamily.anton:
         return GoogleFonts.anton(textStyle: base);
       case SubtitleFontFamily.bebas:
@@ -64,6 +191,8 @@ class VideoCanvasPreview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final activeBroll = _getCurrentActiveBroll();
+
     return AspectRatio(
       aspectRatio: 9 / 16,
       child: Container(
@@ -72,7 +201,7 @@ class VideoCanvasPreview extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.4),
+              color: Colors.black.withValues(alpha: 0.4),
               blurRadius: 18,
               offset: const Offset(0, 6),
             ),
@@ -83,51 +212,93 @@ class VideoCanvasPreview extends StatelessWidget {
           alignment: Alignment.center,
           children: [
             // Video Layer (With Video Transition Effect)
-            if (controller != null && controller!.value.isInitialized)
+            if (widget.controller != null && widget.controller!.value.isInitialized)
               _applyVideoTransition(_buildVideoLayout())
             else
               const Center(
                 child: CircularProgressIndicator(color: Color(0xFF00B4D8)),
               ),
 
-            // Active B-roll Cutaway Overlay
-            ..._buildActiveBrolls(),
+            // Active B-roll Cutaway Footage (Clean video/image overlay without template cards)
+            if (activeBroll != null)
+              _buildBrollOverlay(activeBroll),
 
             // Hook Overlay (Teks besar yang muncul di atas klip)
-            if (layout.hook.text.trim().isNotEmpty && _isHookVisible())
+            if (!widget.hideOverlays &&
+                widget.layout.hook.text.trim().isNotEmpty &&
+                _isHookVisible())
               _buildHookOverlay(),
 
             // Watermark Overlay
-            if (layout.watermark.text.trim().isNotEmpty)
+            if (!widget.hideOverlays && widget.layout.watermark.text.trim().isNotEmpty)
               _buildWatermarkOverlay(),
 
-            // Live Subtitle Overlay (Matching Screenshot: Solid Yellow box, Poppins/Anton, etc.)
-            _buildSubtitleOverlay(),
+            // Live Subtitle Overlay
+            if (!widget.hideOverlays)
+              _buildSubtitleOverlay(),
           ],
         ),
       ),
     );
   }
 
-  List<Widget> _buildActiveBrolls() {
-    final activeBrolls = clip.brolls.where((b) {
-      return currentPosition >= b.startTime && currentPosition <= b.endTime;
-    }).toList();
-
-    return activeBrolls.map((b) => _buildBrollOverlay(b)).toList();
-  }
-
   Widget _buildBrollOverlay(BrollItem broll) {
-    // Cinematic Ken-Burns progressive scale (1.0 -> 1.15)
-    final elapsedMs = (currentPosition - broll.startTime).inMilliseconds;
+    final isVideoFile = broll.filePath != null && FFmpegRenderService.isVideoFilePath(broll.filePath);
+
+    if (isVideoFile) {
+      if (_brollController != null && _brollController!.value.isInitialized) {
+        final bAspect = _brollController!.value.aspectRatio > 0
+            ? _brollController!.value.aspectRatio
+            : 16 / 9;
+        final bw = bAspect >= 1.0 ? 1000.0 * bAspect : 1000.0;
+        final bh = bAspect >= 1.0 ? 1000.0 : 1000.0 / bAspect;
+
+        return Positioned.fill(
+          child: Container(
+            color: Colors.black,
+            child: SizedBox.expand(
+              child: FittedBox(
+                fit: BoxFit.cover,
+                child: SizedBox(
+                  width: bw,
+                  height: bh,
+                  child: AspectRatio(
+                    aspectRatio: bAspect,
+                    child: VideoPlayer(_brollController!),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      } else {
+        return Positioned.fill(
+          child: Container(
+            color: Colors.black,
+            child: const Center(
+              child: SizedBox(
+                width: 28,
+                height: 28,
+                child: CircularProgressIndicator(
+                  color: Color(0xFFFF5722),
+                  strokeWidth: 2.5,
+                ),
+              ),
+            ),
+          ),
+        );
+      }
+    }
+
+    // Image B-roll (from Gallery or Stock Footage URL) with smooth Ken-Burns zoom (1.0 -> 1.12)
+    final elapsedMs = (widget.currentPosition - broll.startTime).inMilliseconds;
     final totalMs = broll.duration.inMilliseconds > 0 ? broll.duration.inMilliseconds : 3000;
     final progress = (elapsedMs / totalMs).clamp(0.0, 1.0);
-    final scale = 1.0 + (progress * 0.15);
+    final scale = 1.0 + (progress * 0.12);
 
-    // Stock footage imagery mapping
     String imageUrl = (broll.visualUrl != null && broll.visualUrl!.isNotEmpty)
         ? broll.visualUrl!
-        : 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=800'; // default nature
+        : 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=800';
     if (broll.visualUrl == null || broll.visualUrl!.isEmpty) {
       final lowerTitle = broll.title.toLowerCase();
       if (lowerTitle.contains('tech') || lowerTitle.contains('keyboard') || lowerTitle.contains('typing')) {
@@ -141,245 +312,106 @@ class VideoCanvasPreview extends StatelessWidget {
       }
     }
 
-    final remainingSec = ((broll.endTime - currentPosition).inMilliseconds / 1000.0).clamp(0.0, 99.0);
-
     return Positioned.fill(
       child: Container(
         color: Colors.black,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            // Background Visual Image with Ken-Burns Zoom
-            Positioned.fill(
-              child: Transform.scale(
-                scale: scale,
-                child: broll.filePath != null
-                    ? Image.file(
-                        File(broll.filePath!),
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => _buildFallbackBrollBg(broll),
-                      )
-                    : Image.network(
-                        imageUrl,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => _buildFallbackBrollBg(broll),
-                      ),
-              ),
-            ),
-
-            // Vignette & gradient overlay
-            Positioned.fill(
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      Colors.black.withValues(alpha: 0.65),
-                      Colors.transparent,
-                      Colors.black.withValues(alpha: 0.75),
-                    ],
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                  ),
+        child: Transform.scale(
+          scale: scale,
+          child: broll.filePath != null
+              ? Image.file(
+                  File(broll.filePath!),
+                  fit: BoxFit.cover,
+                  width: double.infinity,
+                  height: double.infinity,
+                  errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                )
+              : Image.network(
+                  imageUrl,
+                  fit: BoxFit.cover,
+                  width: double.infinity,
+                  height: double.infinity,
+                  errorBuilder: (_, __, ___) => const SizedBox.shrink(),
                 ),
-              ),
-            ),
-
-            // Top Header: B-roll status badge
-            Positioned(
-              top: 14,
-              left: 12,
-              right: 12,
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFF5722),
-                      borderRadius: BorderRadius.circular(6),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFFFF5722).withValues(alpha: 0.4),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: const [
-                        Icon(Icons.movie_filter, color: Colors.white, size: 14),
-                        SizedBox(width: 4),
-                        Text(
-                          'B-ROLL CUTAWAY',
-                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 10),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const Spacer(),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.7),
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: Colors.white30),
-                    ),
-                    child: Text(
-                      '${remainingSec.toStringAsFixed(1)}s',
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // Center Title
-            Positioned(
-              bottom: 24,
-              left: 16,
-              right: 16,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.75),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFFFF5722), width: 1.5),
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      broll.title.toUpperCase(),
-                      textAlign: TextAlign.center,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w900,
-                        fontSize: 13,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Footage disisipkan di ${((broll.startTime - clip.startTime).inMilliseconds / 1000).toStringAsFixed(1)}s klip',
-                      style: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 10),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildFallbackBrollBg(BrollItem broll) {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Color(0xFF1E1B4B), Color(0xFF0F172A)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      child: Center(
-        child: Icon(Icons.movie_filter_rounded, color: Colors.orange.withValues(alpha: 0.3), size: 64),
       ),
     );
   }
 
   bool _isHookVisible() {
-    // Show hook during its specified duration from clip start
-    final relSeconds = (currentPosition - clip.startTime).inMilliseconds / 1000.0;
-    return relSeconds <= layout.hook.durationSeconds || !controller!.value.isPlaying;
+    if (widget.controller == null || !widget.controller!.value.isInitialized) return true;
+    final relSeconds = (widget.currentPosition - widget.clip.startTime).inMilliseconds / 1000.0;
+    return relSeconds <= widget.layout.hook.durationSeconds || !widget.controller!.value.isPlaying;
   }
 
   Widget _buildVideoLayout() {
-    switch (layout.template) {
+    final ctrl = widget.controller!;
+    final safeAspect = ctrl.value.aspectRatio > 0 ? ctrl.value.aspectRatio : 16 / 9;
+    final targetW = safeAspect >= 1.0 ? 1000.0 * safeAspect : 1000.0;
+    final targetH = safeAspect >= 1.0 ? 1000.0 : 1000.0 / safeAspect;
+
+    final videoWidget = SizedBox(
+      width: targetW,
+      height: targetH,
+      child: AspectRatio(
+        aspectRatio: safeAspect,
+        child: VideoPlayer(ctrl),
+      ),
+    );
+
+    switch (widget.layout.template) {
       case KomposisiTemplate.standar:
-        return Stack(
-          fit: StackFit.expand,
-          children: [
-            // Blurred background video
-            Transform.scale(
-              scale: 3.2,
-              child: ImageFiltered(
-                imageFilter: ui.ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-                child: ColorFiltered(
-                  colorFilter: ColorFilter.mode(
-                    Colors.black.withValues(alpha: 0.35),
-                    BlendMode.darken,
-                  ),
-                  child: VideoPlayer(controller!),
-                ),
-              ),
+        return Container(
+          color: const Color(0xFF0F172A),
+          child: Center(
+            child: AspectRatio(
+              aspectRatio: safeAspect,
+              child: VideoPlayer(ctrl),
             ),
-            Center(
-              child: AspectRatio(
-                aspectRatio: controller!.value.aspectRatio,
-                child: VideoPlayer(controller!),
-              ),
-            ),
-          ],
+          ),
         );
 
       case KomposisiTemplate.layarPenuh:
-        // Position crop based on layout.cropPosition (0.0 to 1.0 -> -1.0 to 1.0)
-        final alignX = (layout.cropPosition - 0.5) * 2.0;
+        final alignX = (widget.layout.cropPosition - 0.5) * 2.0;
         return SizedBox.expand(
           child: FittedBox(
             fit: BoxFit.cover,
-            alignment: Alignment(alignX, 0.0),
-            child: SizedBox(
-              width: controller!.value.size.width,
-              height: controller!.value.size.height,
-              child: VideoPlayer(controller!),
-            ),
+            alignment: Alignment(alignX.clamp(-1.0, 1.0), 0.0),
+            child: videoWidget,
           ),
         );
 
       case KomposisiTemplate.dinamis:
-        // Dynamic smart camera pan: smooth sinusoidal panning based on playback time
-        final elapsedSec = (currentPosition - clip.startTime).inMilliseconds / 1000.0;
+        final elapsedSec = (widget.currentPosition - widget.clip.startTime).inMilliseconds / 1000.0;
         final panOffset = math.sin(elapsedSec * 0.9) * 0.50;
-        final alignX = ((layout.cropPosition - 0.5) * 1.5 + panOffset).clamp(-1.0, 1.0);
+        final alignX = ((widget.layout.cropPosition - 0.5) * 1.5 + panOffset).clamp(-1.0, 1.0);
         return SizedBox.expand(
           child: FittedBox(
             fit: BoxFit.cover,
             alignment: Alignment(alignX, 0.0),
-            child: SizedBox(
-              width: controller!.value.size.width,
-              height: controller!.value.size.height,
-              child: VideoPlayer(controller!),
-            ),
+            child: videoWidget,
           ),
         );
 
       case KomposisiTemplate.videoPlusFoto:
-        return Stack(
-          fit: StackFit.expand,
+        return Column(
           children: [
-            Column(
-              children: [
-                Expanded(
-                  flex: 3,
-                  child: AspectRatio(
-                    aspectRatio: controller!.value.aspectRatio,
-                    child: VideoPlayer(controller!),
-                  ),
+            Expanded(
+              flex: 3,
+              child: SizedBox.expand(
+                child: FittedBox(
+                  fit: BoxFit.cover,
+                  child: videoWidget,
                 ),
-                Expanded(
-                  flex: 2,
-                  child: Container(
-                    color: const Color(0xFF14141E),
-                    child: const Center(
-                      child: Icon(Icons.image_outlined, color: Colors.white24, size: 48),
-                    ),
-                  ),
+              ),
+            ),
+            Expanded(
+              flex: 2,
+              child: Container(
+                color: const Color(0xFF14141E),
+                child: const Center(
+                  child: Icon(Icons.image_outlined, color: Colors.white24, size: 48),
                 ),
-              ],
+              ),
             ),
           ],
         );
@@ -392,12 +424,12 @@ class VideoCanvasPreview extends StatelessWidget {
       left: 14,
       right: 14,
       child: Text(
-        layout.hook.text.toUpperCase(),
+        widget.layout.hook.text.toUpperCase(),
         textAlign: TextAlign.center,
         style: GoogleFonts.bebasNeue(
-          fontSize: layout.hook.fontSize,
+          fontSize: widget.layout.hook.fontSize,
           letterSpacing: 1.2,
-          color: layout.hook.color,
+          color: widget.layout.hook.color,
           shadows: const [
             Shadow(color: Colors.black, offset: Offset(2, 2), blurRadius: 4),
             Shadow(color: Colors.black, offset: Offset(-2, -2), blurRadius: 4),
@@ -411,13 +443,13 @@ class VideoCanvasPreview extends StatelessWidget {
 
   Widget _buildWatermarkOverlay() {
     Alignment alignment;
-    if (layout.watermark.position == 'Atas') {
+    if (widget.layout.watermark.position == 'Atas') {
       alignment = Alignment.topRight;
-    } else if (layout.watermark.position == 'Kiri Atas') {
+    } else if (widget.layout.watermark.position == 'Kiri Atas') {
       alignment = Alignment.topLeft;
-    } else if (layout.watermark.position == 'Tengah') {
+    } else if (widget.layout.watermark.position == 'Tengah') {
       alignment = Alignment.center;
-    } else if (layout.watermark.position == 'Kiri Bawah') {
+    } else if (widget.layout.watermark.position == 'Kiri Bawah') {
       alignment = Alignment.bottomLeft;
     } else {
       alignment = Alignment.bottomRight;
@@ -438,9 +470,9 @@ class VideoCanvasPreview extends StatelessWidget {
             ],
           ),
           child: Text(
-            layout.watermark.text,
+            widget.layout.watermark.text,
             style: TextStyle(
-              color: layout.watermark.color.withValues(alpha: layout.watermark.opacity),
+              color: widget.layout.watermark.color.withValues(alpha: widget.layout.watermark.opacity),
               fontSize: 12,
               fontWeight: FontWeight.w800,
               letterSpacing: 0.5,
@@ -452,9 +484,8 @@ class VideoCanvasPreview extends StatelessWidget {
   }
 
   Widget _buildSubtitleOverlay() {
-    // Find active subtitle line
-    final line = clip.subtitles.firstWhere(
-      (l) => currentPosition >= l.startTime && currentPosition <= l.endTime,
+    final line = widget.clip.subtitles.firstWhere(
+      (l) => widget.currentPosition >= l.startTime && widget.currentPosition <= l.endTime,
       orElse: () => SubtitleLine(
         text: '',
         startTime: Duration.zero,
@@ -468,54 +499,50 @@ class VideoCanvasPreview extends StatelessWidget {
     }
 
     Alignment alignment;
-    if (subtitleStyle.position == SubtitlePosition.atas) {
+    if (widget.subtitleStyle.position == SubtitlePosition.atas) {
       alignment = const Alignment(0.0, -0.55);
-    } else if (subtitleStyle.position == SubtitlePosition.tengah) {
+    } else if (widget.subtitleStyle.position == SubtitlePosition.tengah) {
       alignment = Alignment.center;
     } else {
-      alignment = const Alignment(0.0, 0.72); // Default Bawah
+      alignment = const Alignment(0.0, 0.72);
     }
 
-    // Scale font size from the 90px model relative to preview canvas (preview is around ~300px wide, video is 1080px wide)
-    final previewFontSize = (subtitleStyle.fontSize * 0.22).clamp(12.0, 36.0);
+    final previewFontSize = (widget.subtitleStyle.fontSize * 0.22).clamp(12.0, 36.0);
 
-    // List of shadows according to preset
     List<Shadow> shadows = [];
-    if (subtitleStyle.has3dShadow) {
+    if (widget.subtitleStyle.has3dShadow) {
       shadows = [
-        Shadow(color: subtitleStyle.strokeColor, offset: const Offset(1.5, 1.5), blurRadius: 0),
-        Shadow(color: subtitleStyle.strokeColor, offset: const Offset(3.0, 3.0), blurRadius: 0),
-        Shadow(color: subtitleStyle.strokeColor, offset: const Offset(4.5, 4.5), blurRadius: 1),
+        Shadow(color: widget.subtitleStyle.strokeColor, offset: const Offset(1.5, 1.5), blurRadius: 0),
+        Shadow(color: widget.subtitleStyle.strokeColor, offset: const Offset(3.0, 3.0), blurRadius: 0),
+        Shadow(color: widget.subtitleStyle.strokeColor, offset: const Offset(4.5, 4.5), blurRadius: 1),
       ];
-    } else if (subtitleStyle.preset == SubtitlePresetType.outline ||
-        subtitleStyle.bgType == SubtitleBgType.none) {
+    } else if (widget.subtitleStyle.preset == SubtitlePresetType.outline ||
+        widget.subtitleStyle.bgType == SubtitleBgType.none) {
       shadows = [
-        Shadow(color: subtitleStyle.strokeColor, offset: const Offset(1.5, 1.5), blurRadius: 2),
-        Shadow(color: subtitleStyle.strokeColor, offset: const Offset(-1.5, -1.5), blurRadius: 2),
-        Shadow(color: subtitleStyle.strokeColor, offset: const Offset(1.5, -1.5), blurRadius: 2),
-        Shadow(color: subtitleStyle.strokeColor, offset: const Offset(-1.5, 1.5), blurRadius: 2),
+        Shadow(color: widget.subtitleStyle.strokeColor, offset: const Offset(1.5, 1.5), blurRadius: 2),
+        Shadow(color: widget.subtitleStyle.strokeColor, offset: const Offset(-1.5, -1.5), blurRadius: 2),
+        Shadow(color: widget.subtitleStyle.strokeColor, offset: const Offset(1.5, -1.5), blurRadius: 2),
+        Shadow(color: widget.subtitleStyle.strokeColor, offset: const Offset(-1.5, 1.5), blurRadius: 2),
       ];
-    } else if (subtitleStyle.bgType == SubtitleBgType.glow) {
+    } else if (widget.subtitleStyle.bgType == SubtitleBgType.glow) {
       shadows = [
-        Shadow(color: subtitleStyle.bgColor, blurRadius: 14),
-        Shadow(color: subtitleStyle.bgColor, blurRadius: 24),
+        Shadow(color: widget.subtitleStyle.bgColor, blurRadius: 14),
+        Shadow(color: widget.subtitleStyle.bgColor, blurRadius: 24),
       ];
     }
 
     Paint? outlinePaint;
-    if (subtitleStyle.isOutlineOnly) {
+    if (widget.subtitleStyle.isOutlineOnly) {
       outlinePaint = Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2.0
-        ..color = subtitleStyle.textColor;
+        ..color = widget.subtitleStyle.textColor;
     }
 
-    // Determine words to show
     List<SubtitleWord> wordsToRender = line.words;
-    if (subtitleStyle.wordByWord) {
-      // Filter only current active word
+    if (widget.subtitleStyle.wordByWord) {
       final activeWord = line.words.where(
-        (w) => currentPosition >= w.startTime && currentPosition <= w.endTime,
+        (w) => widget.currentPosition >= w.startTime && widget.currentPosition <= w.endTime,
       ).firstOrNull;
       if (activeWord != null) {
         wordsToRender = [activeWord];
@@ -529,16 +556,16 @@ class VideoCanvasPreview extends StatelessWidget {
       children: wordsToRender.isNotEmpty
           ? wordsToRender.map((w) {
               return Container(
-                padding: subtitleStyle.bgType == SubtitleBgType.solid
+                padding: widget.subtitleStyle.bgType == SubtitleBgType.solid
                     ? const EdgeInsets.symmetric(horizontal: 8, vertical: 4)
                     : EdgeInsets.zero,
-                decoration: subtitleStyle.bgType == SubtitleBgType.solid
+                decoration: widget.subtitleStyle.bgType == SubtitleBgType.solid
                     ? BoxDecoration(
-                        color: subtitleStyle.bgColor,
+                        color: widget.subtitleStyle.bgColor,
                         borderRadius: BorderRadius.circular(4),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.25),
+                            color: Colors.black.withValues(alpha: 0.25),
                             blurRadius: 4,
                             offset: const Offset(0, 2),
                           ),
@@ -549,16 +576,16 @@ class VideoCanvasPreview extends StatelessWidget {
                   w.word.toUpperCase(),
                   style: _getGoogleFontStyle(
                     fontSize: previewFontSize,
-                    color: (currentPosition >= w.startTime && currentPosition <= w.endTime)
-                        ? subtitleStyle.activeWordColor
-                        : (subtitleStyle.bgType == SubtitleBgType.solid &&
-                                (subtitleStyle.bgColor == const Color(0xFFFFD600) ||
-                                 subtitleStyle.bgColor == Colors.yellow ||
-                                 subtitleStyle.bgColor == const Color(0xFFD6FF00) ||
-                                 subtitleStyle.bgColor == const Color(0xFF00FF2A) ||
-                                 subtitleStyle.bgColor == const Color(0xFFF3ECE0))
+                    color: (widget.currentPosition >= w.startTime && widget.currentPosition <= w.endTime)
+                        ? widget.subtitleStyle.activeWordColor
+                        : (widget.subtitleStyle.bgType == SubtitleBgType.solid &&
+                                (widget.subtitleStyle.bgColor == const Color(0xFFFFD600) ||
+                                    widget.subtitleStyle.bgColor == Colors.yellow ||
+                                    widget.subtitleStyle.bgColor == const Color(0xFFD6FF00) ||
+                                    widget.subtitleStyle.bgColor == const Color(0xFF00FF2A) ||
+                                    widget.subtitleStyle.bgColor == const Color(0xFFF3ECE0))
                             ? Colors.black
-                            : subtitleStyle.textColor),
+                            : widget.subtitleStyle.textColor),
                     shadows: shadows,
                     foreground: outlinePaint,
                   ),
@@ -567,12 +594,12 @@ class VideoCanvasPreview extends StatelessWidget {
             }).toList()
           : [
               Container(
-                padding: subtitleStyle.bgType == SubtitleBgType.solid
+                padding: widget.subtitleStyle.bgType == SubtitleBgType.solid
                     ? const EdgeInsets.symmetric(horizontal: 10, vertical: 5)
                     : EdgeInsets.zero,
-                decoration: subtitleStyle.bgType == SubtitleBgType.solid
+                decoration: widget.subtitleStyle.bgType == SubtitleBgType.solid
                     ? BoxDecoration(
-                        color: subtitleStyle.bgColor,
+                        color: widget.subtitleStyle.bgColor,
                         borderRadius: BorderRadius.circular(4),
                       )
                     : null,
@@ -581,7 +608,7 @@ class VideoCanvasPreview extends StatelessWidget {
                   textAlign: TextAlign.center,
                   style: _getGoogleFontStyle(
                     fontSize: previewFontSize,
-                    color: subtitleStyle.textColor,
+                    color: widget.subtitleStyle.textColor,
                     shadows: shadows,
                     foreground: outlinePaint,
                   ),
@@ -599,15 +626,11 @@ class VideoCanvasPreview extends StatelessWidget {
     );
   }
 
-  /// Menerapkan 12 efek transisi visual animasi pada subtitle:
-  /// dissolve, wipe, fade in, fade out, zoom in, zoom out, slide, glitch, roll, whip, spin, iris
   Widget _applySubtitleTransition(Widget child, SubtitleLine line) {
-    final elapsedMs = (currentPosition - line.startTime).inMilliseconds;
-    final remainingMs = (line.endTime - currentPosition).inMilliseconds;
+    final elapsedMs = (widget.currentPosition - line.startTime).inMilliseconds;
+    final remainingMs = (line.endTime - widget.currentPosition).inMilliseconds;
 
-    // Progress 0.0 -> 1.0 pada 280ms pertama kemunculan
     final double enter = (elapsedMs / 280.0).clamp(0.0, 1.0);
-    // Progress 1.0 -> 0.0 pada 200ms terakhir sebelum menghilang
     final double exit = (remainingMs / 200.0).clamp(0.0, 1.0);
 
     final transitionType = line.transition.toLowerCase().trim();
@@ -706,13 +729,11 @@ class VideoCanvasPreview extends StatelessWidget {
     }
   }
 
-  /// 🎬 Menerapkan Efek Transisi khusus ke VIDEO UTAMA pada menit/detik tertentu
   Widget _applyVideoTransition(Widget child) {
-    final relTimeMs = (currentPosition - clip.startTime).inMilliseconds;
+    final relTimeMs = (widget.currentPosition - widget.clip.startTime).inMilliseconds;
 
-    // Cari apakah ada titik transisi yang sedang aktif saat playback berada di menit/detik ini
     VideoTransitionPoint? activePoint;
-    for (final pt in layout.transitionPoints) {
+    for (final pt in widget.layout.transitionPoints) {
       final startMs = pt.timeOffset.inMilliseconds;
       final durMs = (pt.duration * 1000).round();
       if (durMs <= 0) continue;
@@ -732,9 +753,9 @@ class VideoCanvasPreview extends StatelessWidget {
       final durMs = (activePoint.duration * 1000).round();
       elapsedInTransMs = relTimeMs - startMs;
       enter = (elapsedInTransMs / durMs).clamp(0.0, 1.0);
-    } else if (layout.transitionPoints.isEmpty) {
-      transType = layout.videoTransition.toLowerCase().trim();
-      final totalMs = (layout.videoTransitionDuration * 1000).round();
+    } else if (widget.layout.transitionPoints.isEmpty) {
+      transType = widget.layout.videoTransition.toLowerCase().trim();
+      final totalMs = (widget.layout.videoTransitionDuration * 1000).round();
       if (totalMs > 0 && relTimeMs >= 0 && relTimeMs < totalMs) {
         elapsedInTransMs = relTimeMs;
         enter = (relTimeMs / totalMs).clamp(0.0, 1.0);
@@ -820,6 +841,7 @@ class VideoCanvasPreview extends StatelessWidget {
           ],
         );
 
+      case 'spin 360':
       case 'spin':
         return Transform.rotate(
           angle: (1.0 - enter) * -3.1415,

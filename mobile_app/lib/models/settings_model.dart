@@ -5,6 +5,7 @@ class AppSettings {
   String youtubeCookies;
   int minClipSeconds;
   int maxClipSeconds;
+  String subtitleLanguage; // 'auto', 'en', 'id'
 
   AppSettings({
     this.apiKey = '',
@@ -13,6 +14,7 @@ class AppSettings {
     this.youtubeCookies = '',
     this.minClipSeconds = 30,
     this.maxClipSeconds = 60,
+    this.subtitleLanguage = 'auto',
   });
 
   Map<String, dynamic> toJson() => {
@@ -22,6 +24,7 @@ class AppSettings {
     'youtubeCookies': youtubeCookies,
     'minClipSeconds': minClipSeconds,
     'maxClipSeconds': maxClipSeconds,
+    'subtitleLanguage': subtitleLanguage,
   };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) => AppSettings(
@@ -31,5 +34,6 @@ class AppSettings {
     youtubeCookies: json['youtubeCookies'] ?? '',
     minClipSeconds: json['minClipSeconds'] ?? 30,
     maxClipSeconds: json['maxClipSeconds'] ?? 60,
+    subtitleLanguage: json['subtitleLanguage'] ?? 'auto',
   );
 }

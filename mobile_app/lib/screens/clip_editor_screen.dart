@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
@@ -7,6 +8,7 @@ import '../models/clip_model.dart';
 import '../models/layout_model.dart';
 import '../models/subtitle_style_model.dart';
 import '../services/ai_service.dart';
+import '../services/ffmpeg_render_service.dart';
 import '../services/storage_service.dart';
 import '../widgets/video_canvas_preview.dart';
 import 'render_progress_screen.dart';
@@ -127,8 +129,12 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> with SingleTickerPr
   // Audio settings (Screenshot 5)
   bool _cleanAudio = false;
   double _videoVolumeDb = 0.0;
+  bool _isMuted = false;
+  double _playerVolume = 1.0;
   String? _selectedBgmTrack;
   double _bgmVolume = 0.35;
+  bool _hidePreviewOverlays = false;
+  String _subtitleLanguage = 'auto';
 
   // AI Tools active flags (Screenshot 3)
   final Map<String, bool> _activeAiTools = {
@@ -195,13 +201,15 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> with SingleTickerPr
     _watermarkController.text = _layoutConfig.watermark.text;
     _tabController = TabController(length: 5, vsync: this);
 
-    _initPlayer();
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_currentClip.subtitles.isEmpty) {
-        _transcribeRealAudioWithAi();
+    StorageService.loadSettings().then((s) {
+      if (mounted) {
+        setState(() {
+          _subtitleLanguage = s.subtitleLanguage;
+        });
       }
     });
+
+    _initPlayer();
   }
 
   /// AI Auto Caption Maker: Menghasilkan kalimat dan timing kata-per-kata yang cepat & akurat dari naskah asli
@@ -291,54 +299,62 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> with SingleTickerPr
     String currentStatus = '🎙️ Sistem AI Caption Otomatis...';
     String currentDetail = 'Mengekstrak audio suara video...';
     double currentProgress = 0.0;
+    bool isCancelled = false;
     StateSetter? dialogSetState;
 
-    // Tampilkan modal progress transkripsi langsung tanpa syarat API key
+    // Tampilkan modal progress transkripsi yang dapat dibatalkan jika pengguna ingin kembali mengedit
     showDialog(
       context: context,
-      barrierDismissible: false,
-      builder: (ctx) => WillPopScope(
-        onWillPop: () async => false,
-        child: StatefulBuilder(
-          builder: (context, setModalState) {
-            dialogSetState = setModalState;
-            return Center(
-              child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 28),
-                padding: const EdgeInsets.all(22),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF0F172A),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFF334155)),
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    CircularProgressIndicator(
-                      value: currentProgress > 0 ? currentProgress : null,
-                      color: const Color(0xFFFF5722),
-                      backgroundColor: const Color(0xFF334155),
-                    ),
-                    const SizedBox(height: 18),
-                    Text(
-                      currentStatus,
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      currentDetail,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
-                    ),
-                  ],
-                ),
+      barrierDismissible: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) {
+          dialogSetState = setModalState;
+          return Center(
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 28),
+              padding: const EdgeInsets.all(22),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0F172A),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFF334155)),
               ),
-            );
-          },
-        ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(
+                    value: currentProgress > 0 ? currentProgress : null,
+                    color: const Color(0xFFFF5722),
+                    backgroundColor: const Color(0xFF334155),
+                  ),
+                  const SizedBox(height: 18),
+                  Text(
+                    currentStatus,
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    currentDetail,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                  ),
+                  const SizedBox(height: 16),
+                  TextButton(
+                    onPressed: () {
+                      isCancelled = true;
+                      Navigator.pop(ctx);
+                    },
+                    child: const Text('Batal / Lewati', style: TextStyle(color: Colors.white60, fontSize: 12)),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
-    );
+    ).then((_) {
+      isCancelled = true;
+    });
 
     try {
       final realLines = await AIService.transcribeVideoAudio(
@@ -346,8 +362,9 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> with SingleTickerPr
         clipStart: _currentClip.startTime,
         clipDuration: _currentClip.duration,
         settings: settings,
+        languageOverride: _subtitleLanguage,
         onProgress: (status, progress) {
-          if (dialogSetState != null) {
+          if (dialogSetState != null && !isCancelled) {
             dialogSetState!(() {
               currentStatus = status;
               currentDetail = progress > 0
@@ -361,7 +378,8 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> with SingleTickerPr
         videoTitle: _currentClip.title,
       );
 
-      if (mounted) Navigator.pop(context); // Tutup dialog progress
+      if (isCancelled) return;
+      if (mounted) Navigator.pop(context); // Tutup dialog progress jika masih terbuka
 
       if (realLines.isNotEmpty) {
         _pushSnapshot();
@@ -388,14 +406,16 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> with SingleTickerPr
         );
       }
     } catch (e) {
-      if (mounted) Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Gagal mengekstrak suara: $e'),
-          backgroundColor: const Color(0xFFE11D48),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      if (!isCancelled && mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal mengekstrak suara: $e'),
+            backgroundColor: const Color(0xFFE11D48),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     }
   }
 
@@ -406,6 +426,27 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> with SingleTickerPr
   Future<void> _initPlayer() async {
     _videoController = VideoPlayerController.file(widget.sourceVideoFile);
     await _videoController!.initialize();
+
+    final actualDur = _videoController!.value.duration;
+    if (actualDur > Duration.zero) {
+      var st = _currentClip.startTime;
+      var en = _currentClip.endTime;
+      if (st >= actualDur) {
+        st = Duration.zero;
+        en = actualDur;
+      } else if (en > actualDur) {
+        en = actualDur;
+      }
+      if (en <= st) {
+        st = Duration.zero;
+        en = actualDur;
+      }
+      if (st != _currentClip.startTime || en != _currentClip.endTime) {
+        _currentClip = _currentClip.copyWith(startTime: st, endTime: en);
+      }
+    }
+
+    _syncControllerVolume();
     await _videoController!.seekTo(_currentClip.startTime);
 
     _videoController!.addListener(() {
@@ -421,7 +462,33 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> with SingleTickerPr
       }
     });
 
-    setState(() {});
+    if (mounted) {
+      setState(() {
+        _currentPosition = _currentClip.startTime;
+      });
+    }
+  }
+
+  void _syncControllerVolume() {
+    if (_videoController == null || !_videoController!.value.isInitialized) return;
+    if (_isMuted || _playerVolume <= 0.001) {
+      _videoController!.setVolume(0.0);
+      return;
+    }
+    // Konversi dB (-12dB s/d +12dB) menjadi pengali linear, dikalikan slider volume player
+    final double dbGain = math.pow(10.0, _videoVolumeDb / 20.0).toDouble();
+    final double effectiveVol = (_playerVolume * dbGain).clamp(0.0, 1.0);
+    _videoController!.setVolume(effectiveVol);
+  }
+
+  void _toggleMute() {
+    setState(() {
+      _isMuted = !_isMuted;
+      if (!_isMuted && _playerVolume <= 0.01) {
+        _playerVolume = 1.0;
+      }
+    });
+    _syncControllerVolume();
   }
 
   // Record state for Undo/Redo
@@ -469,6 +536,7 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> with SingleTickerPr
       _hookController.text = _layoutConfig.hook.text;
       _watermarkController.text = _layoutConfig.watermark.text;
     });
+    _syncControllerVolume();
   }
 
   void _redo() {
@@ -498,6 +566,7 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> with SingleTickerPr
       _hookController.text = _layoutConfig.hook.text;
       _watermarkController.text = _layoutConfig.watermark.text;
     });
+    _syncControllerVolume();
   }
 
   @override
@@ -539,15 +608,32 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> with SingleTickerPr
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isWide = constraints.maxWidth >= 950;
-        return Scaffold(
-          backgroundColor: const Color(0xFFF4F6F8),
-          appBar: _buildHeader(),
-          body: isWide ? _buildDesktopLayout() : _buildMobileLayout(),
-        );
-      },
+    final lightEditorTheme = ThemeData.light().copyWith(
+      scaffoldBackgroundColor: const Color(0xFFF4F6F8),
+      colorScheme: const ColorScheme.light(
+        primary: Color(0xFFFF5722),
+        secondary: Color(0xFFFF5722),
+        surface: Colors.white,
+        onSurface: Color(0xFF0F172A),
+      ),
+      textTheme: GoogleFonts.plusJakartaSansTextTheme(ThemeData.light().textTheme).apply(
+        bodyColor: const Color(0xFF0F172A),
+        displayColor: const Color(0xFF0F172A),
+      ),
+    );
+
+    return Theme(
+      data: lightEditorTheme,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isWide = constraints.maxWidth >= 950;
+          return Scaffold(
+            backgroundColor: const Color(0xFFF4F6F8),
+            appBar: _buildHeader(),
+            body: isWide ? _buildDesktopLayout() : _buildMobileLayout(),
+          );
+        },
+      ),
     );
   }
 
@@ -637,6 +723,7 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> with SingleTickerPr
                   subtitleStyle: _subtitleStyle,
                   clip: _currentClip,
                   currentPosition: _currentPosition,
+                  hideOverlays: _hidePreviewOverlays,
                 ),
               ),
               const SizedBox(height: 6),
@@ -777,6 +864,7 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> with SingleTickerPr
                           subtitleStyle: _subtitleStyle,
                           clip: _currentClip,
                           currentPosition: _currentPosition,
+                          hideOverlays: _hidePreviewOverlays,
                         ),
                       ),
                     ),
@@ -1061,7 +1149,13 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> with SingleTickerPr
                     inactiveColor: const Color(0xFFE2E8F0),
                     onChanged: (val) {
                       setModalState(() => _videoVolumeDb = val);
-                      setState(() => _videoVolumeDb = val);
+                      setState(() {
+                        _videoVolumeDb = val;
+                        if (val > -12.0 && _isMuted) {
+                          _isMuted = false;
+                        }
+                      });
+                      _syncControllerVolume();
                     },
                     onChangeEnd: (_) => _pushSnapshot(),
                   ),
@@ -1177,23 +1271,66 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> with SingleTickerPr
           // Aspect Ratio & Preview Icons
           Row(
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.grey[200],
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Row(
-                  children: const [
-                    Text('9:16', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                    Icon(Icons.keyboard_arrow_down, size: 16),
-                  ],
+              InkWell(
+                onTap: _showQuickAspectLayoutMenu,
+                borderRadius: BorderRadius.circular(6),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[200],
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Row(
+                    children: const [
+                      Text('9:16', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+                      Icon(Icons.keyboard_arrow_down, size: 16, color: Color(0xFF0F172A)),
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(width: 10),
-              const Icon(Icons.tune, size: 20, color: Color(0xFF64748B)),
-              const SizedBox(width: 10),
-              const Icon(Icons.visibility_outlined, size: 20, color: Color(0xFF64748B)),
+              InkWell(
+                onTap: _showAudioModal,
+                borderRadius: BorderRadius.circular(8),
+                child: Padding(
+                  padding: const EdgeInsets.all(4.0),
+                  child: Icon(
+                    Icons.tune,
+                    size: 20,
+                    color: (_cleanAudio || _videoVolumeDb.abs() > 0.1)
+                        ? const Color(0xFFFF5722)
+                        : const Color(0xFF64748B),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              InkWell(
+                onTap: () {
+                  setState(() {
+                    _hidePreviewOverlays = !_hidePreviewOverlays;
+                  });
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        _hidePreviewOverlays
+                            ? '👁️ Overlay teks/subtitle disembunyikan sementara'
+                            : '👁️ Overlay teks/subtitle ditampilkan kembali',
+                      ),
+                      duration: const Duration(milliseconds: 1200),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                },
+                borderRadius: BorderRadius.circular(8),
+                child: Padding(
+                  padding: const EdgeInsets.all(4.0),
+                  child: Icon(
+                    _hidePreviewOverlays ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                    size: 20,
+                    color: _hidePreviewOverlays ? const Color(0xFFFF5722) : const Color(0xFF64748B),
+                  ),
+                ),
+              ),
               const Spacer(),
             ],
           ),
@@ -1243,9 +1380,53 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> with SingleTickerPr
                 ),
               ),
               const Spacer(),
-              const Icon(Icons.volume_up, size: 20, color: Color(0xFF64748B)),
-              const SizedBox(width: 14),
-              const Icon(Icons.fullscreen, size: 22, color: Color(0xFF64748B)),
+              // Volume Control Button (Tap -> Volume popup, LongPress -> Instant Mute/Unmute)
+              InkWell(
+                onTap: _showVolumeControlModal,
+                onLongPress: _toggleMute,
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: (_isMuted || _playerVolume <= 0.01)
+                        ? const Color(0xFFFF5722).withOpacity(0.12)
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        (_isMuted || _playerVolume <= 0.01)
+                            ? Icons.volume_off_rounded
+                            : (_playerVolume < 0.5 ? Icons.volume_down_rounded : Icons.volume_up_rounded),
+                        size: 22,
+                        color: (_isMuted || _playerVolume <= 0.01)
+                            ? const Color(0xFFFF5722)
+                            : const Color(0xFF475569),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        _isMuted ? 'Mute' : '${(_playerVolume * 100).round()}%',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: (_isMuted || _playerVolume <= 0.01)
+                              ? const Color(0xFFFF5722)
+                              : const Color(0xFF64748B),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              // Fullscreen Preview Button
+              IconButton(
+                tooltip: 'Layar Penuh (Fullscreen Preview)',
+                onPressed: _openFullscreenPreview,
+                icon: const Icon(Icons.fullscreen_rounded, size: 26, color: Color(0xFF334155)),
+              ),
             ],
           ),
         ],
@@ -1258,6 +1439,442 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> with SingleTickerPr
     final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
     final cs = (d.inMilliseconds.remainder(1000) ~/ 10).toString().padLeft(2, '0');
     return '$m:$s.$cs';
+  }
+
+  void _showQuickAspectLayoutMenu() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.all(20),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Mode Komposisi Rasio 9:16',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF0F172A)),
+            ),
+            const SizedBox(height: 12),
+            ListTile(
+              leading: const Icon(Icons.crop_portrait, color: Color(0xFFFF5722)),
+              title: const Text('Layar Penuh (Full 9:16)', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+              subtitle: const Text('Tampilan penuh vertikal standar Shorts/Reels/TikTok', style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+              trailing: _layoutConfig.template == KomposisiTemplate.layarPenuh
+                  ? const Icon(Icons.check_circle, color: Color(0xFFFF5722))
+                  : null,
+              onTap: () {
+                _pushSnapshot();
+                setState(() => _layoutConfig = _layoutConfig.copyWith(template: KomposisiTemplate.layarPenuh));
+                Navigator.pop(ctx);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.blur_on, color: Color(0xFFFF5722)),
+              title: const Text('Standar (Center + Latar Blur)', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+              subtitle: const Text('Video utuh di tengah dengan bingkai blur estetik', style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+              trailing: _layoutConfig.template == KomposisiTemplate.standar
+                  ? const Icon(Icons.check_circle, color: Color(0xFFFF5722))
+                  : null,
+              onTap: () {
+                _pushSnapshot();
+                setState(() => _layoutConfig = _layoutConfig.copyWith(template: KomposisiTemplate.standar));
+                Navigator.pop(ctx);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.auto_graph, color: Color(0xFFFF5722)),
+              title: const Text('Dinamis (Punch-In Zoom)', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+              subtitle: const Text('Fokus dekat pada pembicara secara dinamis', style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+              trailing: _layoutConfig.template == KomposisiTemplate.dinamis
+                  ? const Icon(Icons.check_circle, color: Color(0xFFFF5722))
+                  : null,
+              onTap: () {
+                _pushSnapshot();
+                setState(() => _layoutConfig = _layoutConfig.copyWith(template: KomposisiTemplate.dinamis));
+                Navigator.pop(ctx);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.splitscreen, color: Color(0xFFFF5722)),
+              title: const Text('Split Screen (Video + Foto)', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+              subtitle: const Text('Bagian atas video utama, bagian bawah foto pendukung', style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+              trailing: _layoutConfig.template == KomposisiTemplate.videoPlusFoto
+                  ? const Icon(Icons.check_circle, color: Color(0xFFFF5722))
+                  : null,
+              onTap: () {
+                _pushSnapshot();
+                setState(() => _layoutConfig = _layoutConfig.copyWith(template: KomposisiTemplate.videoPlusFoto));
+                Navigator.pop(ctx);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ==========================================
+  // 🔊 VOLUME & AUDIO QUICK CONTROL MODAL
+  // ==========================================
+  void _showVolumeControlModal() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (modalCtx, setModalState) {
+            return Container(
+              padding: const EdgeInsets.all(20),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFCBD5E1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            _isMuted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
+                            color: const Color(0xFFFF5722),
+                            size: 24,
+                          ),
+                          const SizedBox(width: 10),
+                          const Text(
+                            'Pengaturan Volume Suara Video',
+                            style: TextStyle(
+                              color: Color(0xFF0F172A),
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _isMuted ? const Color(0xFFEF4444) : const Color(0xFFF1F5F9),
+                          foregroundColor: _isMuted ? Colors.white : const Color(0xFF0F172A),
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        onPressed: () {
+                          _toggleMute();
+                          setModalState(() {});
+                        },
+                        icon: Icon(_isMuted ? Icons.volume_off : Icons.volume_up, size: 16),
+                        label: Text(
+                          _isMuted ? 'Dibisukan (Muted)' : 'Bisukan (Mute)',
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+
+                  // Slider 1: Volume Pemutar (0% - 100%)
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Volume Suara Utama',
+                        style: TextStyle(color: Color(0xFF334155), fontSize: 13, fontWeight: FontWeight.w600),
+                      ),
+                      Text(
+                        _isMuted ? '0% (Mute)' : '${(_playerVolume * 100).round()}%',
+                        style: const TextStyle(color: Color(0xFFFF5722), fontSize: 13, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                  Slider(
+                    value: _isMuted ? 0.0 : _playerVolume,
+                    min: 0.0,
+                    max: 1.0,
+                    activeColor: const Color(0xFFFF5722),
+                    inactiveColor: const Color(0xFFE2E8F0),
+                    onChanged: (val) {
+                      setModalState(() {
+                        _playerVolume = val;
+                        _isMuted = val <= 0.005;
+                      });
+                      setState(() {
+                        _playerVolume = val;
+                        _isMuted = val <= 0.005;
+                      });
+                      _syncControllerVolume();
+                    },
+                  ),
+                  const SizedBox(height: 8),
+
+                  // Slider 2: Gain Boost Render (-12 dB s/d +12 dB)
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Boost / Gain Audio Saat Export (dB)',
+                        style: TextStyle(color: Color(0xFF334155), fontSize: 13, fontWeight: FontWeight.w600),
+                      ),
+                      Text(
+                        '${_videoVolumeDb >= 0 ? '+' : ''}${_videoVolumeDb.round()} dB',
+                        style: const TextStyle(color: Color(0xFF0F172A), fontSize: 13, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                  Slider(
+                    value: _videoVolumeDb,
+                    min: -12.0,
+                    max: 12.0,
+                    divisions: 24,
+                    activeColor: const Color(0xFFFF5722),
+                    inactiveColor: const Color(0xFFE2E8F0),
+                    onChanged: (val) {
+                      setModalState(() => _videoVolumeDb = val);
+                      setState(() => _videoVolumeDb = val);
+                      _syncControllerVolume();
+                    },
+                    onChangeEnd: (_) => _pushSnapshot(),
+                  ),
+
+                  const Divider(height: 20),
+
+                  // Clean Audio Toggle
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    activeColor: const Color(0xFFFF5722),
+                    title: const Text(
+                      'AI Clean Audio (Jernihkan Suara & Hapus Noise)',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A)),
+                    ),
+                    subtitle: const Text(
+                      'Menyaring desis latar dan menstabilkan volume vokal saat render',
+                      style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                    ),
+                    value: _cleanAudio,
+                    onChanged: (val) {
+                      _pushSnapshot();
+                      setModalState(() => _cleanAudio = val);
+                      setState(() {
+                        _cleanAudio = val;
+                        _activeAiTools['Clean Audio'] = val;
+                      });
+                    },
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // ==========================================
+  // 🖥️ FULLSCREEN VIDEO PREVIEW DIALOG
+  // ==========================================
+  void _openFullscreenPreview() {
+    if (_videoController == null || !_videoController!.value.isInitialized) return;
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (fullscreenCtx) {
+          return StatefulBuilder(
+            builder: (ctx, setFullState) {
+              return ValueListenableBuilder<VideoPlayerValue>(
+                valueListenable: _videoController!,
+                builder: (context, videoVal, _) {
+                  final clipStart = _currentClip.startTime;
+                  final clipDuration = _currentClip.duration;
+                  final totalSec = clipDuration.inMilliseconds > 0
+                      ? clipDuration.inMilliseconds / 1000.0
+                      : 1.0;
+                  final pos = videoVal.position;
+                  final relativePos = pos >= clipStart ? (pos - clipStart) : Duration.zero;
+                  final clampedPos = relativePos > clipDuration ? clipDuration : relativePos;
+                  final curSec = (clampedPos.inMilliseconds / 1000.0).clamp(0.0, totalSec);
+
+                  return Scaffold(
+                    backgroundColor: Colors.black,
+                    body: SafeArea(
+                      child: Stack(
+                        children: [
+                          // Center Fullscreen 9:16 Video Canvas
+                          Center(
+                            child: Padding(
+                              padding: const EdgeInsets.only(top: 52, bottom: 110),
+                              child: VideoCanvasPreview(
+                                controller: _videoController,
+                                layout: _layoutConfig,
+                                subtitleStyle: _subtitleStyle,
+                                clip: _currentClip,
+                                currentPosition: pos,
+                                hideOverlays: _hidePreviewOverlays,
+                              ),
+                            ),
+                          ),
+
+                          // Top Bar: Back / Close Fullscreen + Title + Hide Overlays
+                          Positioned(
+                            top: 8,
+                            left: 12,
+                            right: 12,
+                            child: Row(
+                              children: [
+                                IconButton(
+                                  style: IconButton.styleFrom(
+                                    backgroundColor: Colors.black54,
+                                  ),
+                                  icon: const Icon(Icons.fullscreen_exit_rounded, color: Colors.white, size: 26),
+                                  onPressed: () => Navigator.of(fullscreenCtx).pop(),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    _currentClip.title,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ),
+                                IconButton(
+                                  tooltip: 'Tampilkan/Sembunyikan Teks',
+                                  style: IconButton.styleFrom(
+                                    backgroundColor: Colors.black54,
+                                  ),
+                                  icon: Icon(
+                                    _hidePreviewOverlays ? Icons.visibility_off : Icons.visibility,
+                                    color: Colors.white,
+                                    size: 20,
+                                  ),
+                                  onPressed: () {
+                                    setState(() {
+                                      _hidePreviewOverlays = !_hidePreviewOverlays;
+                                    });
+                                    setFullState(() {});
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          // Bottom Controls Bar in Fullscreen
+                          Positioned(
+                            bottom: 12,
+                            left: 16,
+                            right: 16,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF0F172A).withOpacity(0.92),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: Colors.white12),
+                              ),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  SliderTheme(
+                                    data: SliderTheme.of(context).copyWith(
+                                      activeTrackColor: const Color(0xFFFF5722),
+                                      inactiveTrackColor: Colors.white24,
+                                      thumbColor: const Color(0xFFFF5722),
+                                      thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
+                                      trackHeight: 4,
+                                    ),
+                                    child: Slider(
+                                      value: curSec,
+                                      min: 0.0,
+                                      max: totalSec,
+                                      onChanged: (val) {
+                                        final target = clipStart + Duration(milliseconds: (val * 1000).toInt());
+                                        _videoController?.seekTo(target);
+                                      },
+                                    ),
+                                  ),
+                                  Row(
+                                    children: [
+                                      IconButton(
+                                        onPressed: () {
+                                          _togglePlayPause();
+                                          setFullState(() {});
+                                        },
+                                        icon: Icon(
+                                          videoVal.isPlaying ? Icons.pause_circle_filled : Icons.play_circle_fill,
+                                          color: const Color(0xFFFF5722),
+                                          size: 34,
+                                        ),
+                                      ),
+                                      Text(
+                                        '${_formatTimestamp(clampedPos)} / ${_formatTimestamp(clipDuration)}',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      const Spacer(),
+                                      IconButton(
+                                        tooltip: _isMuted ? 'Unmute' : 'Mute',
+                                        onPressed: () {
+                                          _toggleMute();
+                                          setFullState(() {});
+                                        },
+                                        icon: Icon(
+                                          (_isMuted || _playerVolume <= 0.01)
+                                              ? Icons.volume_off_rounded
+                                              : Icons.volume_up_rounded,
+                                          color: (_isMuted || _playerVolume <= 0.01)
+                                              ? const Color(0xFFFF5722)
+                                              : Colors.white,
+                                          size: 24,
+                                        ),
+                                      ),
+                                      IconButton(
+                                        tooltip: 'Keluar Layar Penuh',
+                                        onPressed: () => Navigator.of(fullscreenCtx).pop(),
+                                        icon: const Icon(Icons.fullscreen_exit_rounded, color: Colors.white, size: 26),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              );
+            },
+          );
+        },
+      ),
+    );
   }
 
   // ==========================================
@@ -1669,6 +2286,40 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> with SingleTickerPr
   // ==========================================
   // 📝 TAB 2: CAPTIONS (AI CAPTION MAKER)
   // ==========================================
+  Widget _buildEditorLangChip(String code, String label) {
+    final isSelected = _subtitleLanguage == code;
+    return Expanded(
+      child: InkWell(
+        onTap: () async {
+          setState(() {
+            _subtitleLanguage = code;
+          });
+          final s = await StorageService.loadSettings();
+          s.subtitleLanguage = code;
+          await StorageService.saveSettings(s);
+        },
+        borderRadius: BorderRadius.circular(7),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 5),
+          decoration: BoxDecoration(
+            color: isSelected ? const Color(0xFFFF5722) : Colors.transparent,
+            borderRadius: BorderRadius.circular(7),
+          ),
+          child: Center(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? Colors.white : Colors.white70,
+                fontSize: 11,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildCaptionsTab() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -1725,6 +2376,39 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> with SingleTickerPr
                   ],
                 ),
                 const SizedBox(height: 12),
+                // Pilihan Bahasa Subtitle AI (Auto / English / Indonesia)
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.28),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.white12),
+                  ),
+                  child: Row(
+                    children: [
+                      const SizedBox(width: 6),
+                      const Icon(Icons.translate_rounded, color: Color(0xFFFF5722), size: 15),
+                      const SizedBox(width: 6),
+                      const Text(
+                        'Bahasa:',
+                        style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Row(
+                          children: [
+                            _buildEditorLangChip('auto', '🌐 Auto'),
+                            const SizedBox(width: 5),
+                            _buildEditorLangChip('en', '🇬🇧 English'),
+                            const SizedBox(width: 5),
+                            _buildEditorLangChip('id', '🇮🇩 Indo'),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 10),
                 Row(
                   children: [
                     Expanded(
@@ -2414,7 +3098,12 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> with SingleTickerPr
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const SettingsScreen()),
-                );
+                ).then((_) async {
+                  final s = await StorageService.loadSettings();
+                  if (mounted) {
+                    setState(() => _subtitleLanguage = s.subtitleLanguage);
+                  }
+                });
               },
               borderRadius: BorderRadius.circular(12),
               child: Container(
@@ -3780,19 +4469,22 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> with SingleTickerPr
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
-                  Text(
-                    'B-rolls Footage',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF0F172A)),
-                  ),
-                  Text(
-                    'Footage cutaway visual saat narasi klip',
-                    style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
-                  ),
-                ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: const [
+                    Text(
+                      'B-rolls Footage',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF0F172A)),
+                    ),
+                    Text(
+                      'Footage cutaway visual saat narasi klip',
+                      style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                    ),
+                  ],
+                ),
               ),
+              const SizedBox(width: 8),
               ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFFF5722),
@@ -3847,7 +4539,7 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> with SingleTickerPr
                         SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            'Belum ada B-roll yang disisipkan. Klik "Insert" pada daftar stock di bawah.',
+                            'Belum ada B-roll yang disisipkan. Klik "Upload B-roll" atau "Insert" pada daftar di bawah.',
                             style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
                           ),
                         ),
@@ -3858,8 +4550,10 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> with SingleTickerPr
                   ..._currentClip.brolls.asMap().entries.map((entry) {
                     final idx = entry.key;
                     final b = entry.value;
-                    final startS = (b.startTime.inMilliseconds / 1000.0).toStringAsFixed(1);
-                    final endS = ((b.startTime + b.duration).inMilliseconds / 1000.0).toStringAsFixed(1);
+                    final relStartMs = (b.startTime - _currentClip.startTime).inMilliseconds;
+                    final startS = (math.max(0, relStartMs) / 1000.0).toStringAsFixed(1);
+                    final endS = ((math.max(0, relStartMs) + b.duration.inMilliseconds) / 1000.0).toStringAsFixed(1);
+                    final isVideoFile = FFmpegRenderService.isVideoFilePath(b.filePath);
 
                     return Container(
                       margin: const EdgeInsets.symmetric(vertical: 4),
@@ -3871,15 +4565,30 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> with SingleTickerPr
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.movie, size: 18, color: Color(0xFFFF5722)),
+                          Icon(
+                            isVideoFile ? Icons.videocam_rounded : Icons.movie,
+                            size: 18,
+                            color: const Color(0xFFFF5722),
+                          ),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(b.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                                Text('Waktu tayang: ${startS}s - ${endS}s (${b.duration.inSeconds}s)',
-                                    style: const TextStyle(color: Color(0xFF64748B), fontSize: 11)),
+                                Text(
+                                  b.title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                    color: Color(0xFF0F172A),
+                                  ),
+                                ),
+                                Text(
+                                  'Waktu tayang: ${startS}s - ${endS}s (${b.duration.inSeconds}s)',
+                                  style: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
+                                ),
                               ],
                             ),
                           ),
@@ -3977,11 +4686,13 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> with SingleTickerPr
                       ),
                       onPressed: () {
                         final durSec = int.tryParse(b['dur'].toString().replaceAll('s', '')) ?? 3;
+                        final remaining = (_currentClip.endTime - _currentPosition).inSeconds;
+                        final safeSec = remaining > 1 ? math.min(durSec, remaining) : 2;
                         _pushSnapshot();
                         final newBroll = BrollItem(
                           title: b['title'] as String,
                           startTime: _currentPosition,
-                          duration: Duration(seconds: durSec),
+                          duration: Duration(seconds: safeSec),
                           category: 'Stock',
                           visualUrl: b['url'] as String?,
                         );
@@ -4013,34 +4724,164 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> with SingleTickerPr
   }
 
   Future<void> _pickCustomBrollFromGallery() async {
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.all(20),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Pilih Media B-roll dari Galeri HP',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF0F172A)),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Media B-roll akan ditampilkan di atas klip utama pada posisi waktu saat ini:',
+              style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+            ),
+            const SizedBox(height: 14),
+            ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFF5722).withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.videocam_rounded, color: Color(0xFFFF5722)),
+              ),
+              title: const Text('Video B-roll dari Galeri', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+              subtitle: const Text('Pilih rekaman video MP4/MOV untuk disisipkan sebagai video cutaway', style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+              onTap: () => Navigator.pop(ctx, 'video'),
+            ),
+            ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0EA5E9).withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.photo_library_rounded, color: Color(0xFF0EA5E9)),
+              ),
+              title: const Text('Foto / Gambar B-roll dari Galeri', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+              subtitle: const Text('Pilih foto/screenshot untuk ditampilkan sebagai visual B-roll', style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+              onTap: () => Navigator.pop(ctx, 'image'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (choice == null) return;
+
     try {
       final picker = ImagePicker();
+      if (choice == 'image') {
+        final img = await picker.pickImage(source: ImageSource.gallery);
+        if (img != null && mounted) {
+          final insertAt = (_currentPosition >= _currentClip.startTime && _currentPosition < _currentClip.endTime)
+              ? _currentPosition
+              : _currentClip.startTime;
+          final remaining = (_currentClip.endTime - insertAt).inSeconds;
+          final safeSec = remaining > 1 ? math.min(4, remaining) : 2;
+          _pushSnapshot();
+          final newBroll = BrollItem(
+            title: img.name.isNotEmpty ? img.name : 'Foto B-roll Galeri',
+            startTime: insertAt,
+            duration: Duration(seconds: safeSec),
+            category: 'Custom Image',
+            filePath: img.path,
+          );
+          setState(() {
+            _currentClip.brolls.add(newBroll);
+          });
+          _videoController?.seekTo(newBroll.startTime);
+          _videoController?.play();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('✅ Foto B-roll dari galeri berhasil disematkan dan langsung ditampilkan!'),
+              backgroundColor: Color(0xFF0F172A),
+            ),
+          );
+        }
+        return;
+      }
+
       final video = await picker.pickVideo(source: ImageSource.gallery);
-      if (video != null) {
+      if (video != null && mounted) {
+        // Tampilkan indikator normalisasi agar video B-roll tidak miring/rusak
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => Center(
+            child: Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0F172A),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: const [
+                  CircularProgressIndicator(color: Color(0xFFFF5722)),
+                  SizedBox(height: 14),
+                  Text(
+                    'Menyiapkan Video B-roll...',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+
+        final rawBrollFile = File(video.path);
+        final probedDur = await FFmpegRenderService.probeVideoDuration(rawBrollFile);
+        if (mounted) Navigator.pop(context);
+
+        final int brollSeconds = (probedDur != null && probedDur > Duration.zero)
+            ? probedDur.inSeconds.clamp(2, 8)
+            : 4;
+        final insertAt = (_currentPosition >= _currentClip.startTime && _currentPosition < _currentClip.endTime)
+            ? _currentPosition
+            : _currentClip.startTime;
+        final remaining = (_currentClip.endTime - insertAt).inSeconds;
+        final safeSec = remaining > 1 ? math.min(brollSeconds, remaining) : 2;
+
         _pushSnapshot();
         final newBroll = BrollItem(
-          title: video.name.isNotEmpty ? video.name : 'Custom Video B-roll',
-          startTime: _currentPosition,
-          duration: const Duration(seconds: 4),
-          category: 'Custom',
-          filePath: video.path,
+          title: video.name.isNotEmpty ? video.name : 'Video B-roll Galeri',
+          startTime: insertAt,
+          duration: Duration(seconds: safeSec),
+          category: 'Custom Video',
+          filePath: rawBrollFile.path,
         );
         setState(() {
           _currentClip.brolls.add(newBroll);
         });
         _videoController?.seekTo(newBroll.startTime);
         _videoController?.play();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ B-roll dari galeri berhasil disematkan dan dipratinjau di timeline!'),
-            backgroundColor: Color(0xFF0F172A),
-          ),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('✅ Video B-roll dari galeri berhasil disematkan dan diputar langsung!'),
+              backgroundColor: Color(0xFF0F172A),
+            ),
+          );
+        }
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal memilih video B-roll: $e')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal memilih B-roll: $e')),
+        );
+      }
     }
   }
 
@@ -4581,11 +5422,13 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> with SingleTickerPr
                     clip: _currentClip,
                     layout: _layoutConfig,
                     subtitleStyle: _subtitleStyle,
+                    cleanAudio: _cleanAudio,
+                    videoVolumeDb: _videoVolumeDb,
                   ),
                 ),
               );
             },
-            child: const Text('Simpan & Render', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: const Text('Render', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),

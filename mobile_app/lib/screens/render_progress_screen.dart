@@ -12,6 +12,8 @@ class RenderProgressScreen extends StatefulWidget {
   final ClipSegment clip;
   final LayoutConfig layout;
   final SubtitleStyleConfig subtitleStyle;
+  final bool cleanAudio;
+  final double videoVolumeDb;
 
   const RenderProgressScreen({
     super.key,
@@ -19,6 +21,8 @@ class RenderProgressScreen extends StatefulWidget {
     required this.clip,
     required this.layout,
     required this.subtitleStyle,
+    this.cleanAudio = false,
+    this.videoVolumeDb = 0.0,
   });
 
   @override
@@ -46,6 +50,8 @@ class _RenderProgressScreenState extends State<RenderProgressScreen> {
         clip: widget.clip,
         layout: widget.layout,
         subtitleStyle: widget.subtitleStyle,
+        cleanAudio: widget.cleanAudio,
+        videoVolumeDb: widget.videoVolumeDb,
         onProgress: (p) {
           if (mounted) setState(() => _progress = p);
         },

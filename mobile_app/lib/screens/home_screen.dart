@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:video_player/video_player.dart';
 import '../models/clip_model.dart';
 import '../services/ai_service.dart';
+import '../services/ffmpeg_render_service.dart';
 import '../services/storage_service.dart';
 import '../services/youtube_service.dart';
 import 'clip_editor_screen.dart';
@@ -80,15 +81,38 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // Auto AI Clip Count
   int _clipCount = 3;
+  String _selectedLanguage = 'auto'; // 'auto', 'en', 'id'
 
   // Manual Clip by Request list
   final List<ManualClipItem> _manualClips = [
-    ManualClipItem(start: '00:15', end: '01:00'),
+    ManualClipItem(start: '00:00', end: '00:45'),
   ];
 
   bool _isProcessing = false;
   String _processStatus = '';
   double _downloadProgress = 0.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadInitialSettings();
+  }
+
+  Future<void> _loadInitialSettings() async {
+    final s = await StorageService.loadSettings();
+    if (mounted) {
+      setState(() {
+        _selectedLanguage = s.subtitleLanguage;
+      });
+    }
+  }
+
+  Future<void> _updateLanguageSetting(String lang) async {
+    setState(() => _selectedLanguage = lang);
+    final s = await StorageService.loadSettings();
+    s.subtitleLanguage = lang;
+    await StorageService.saveSettings(s);
+  }
 
   @override
   void dispose() {
@@ -109,7 +133,14 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Duration _pickedGalleryDuration = const Duration(minutes: 3);
+  Duration _pickedGalleryDuration = const Duration(seconds: 45);
+
+  String _formatMMSS(Duration d) {
+    final totalSec = d.inSeconds.clamp(1, 35999);
+    final m = (totalSec ~/ 60).toString().padLeft(2, '0');
+    final s = (totalSec % 60).toString().padLeft(2, '0');
+    return '$m:$s';
+  }
 
   Future<void> _pickVideoFromGallery() async {
     try {
@@ -117,23 +148,39 @@ class _HomeScreenState extends State<HomeScreen> {
       if (video != null) {
         final file = File(video.path);
         final size = await file.length();
-        
-        Duration detectedDuration = const Duration(minutes: 3);
-        try {
-          final tempCtrl = VideoPlayerController.file(file);
-          await tempCtrl.initialize();
-          detectedDuration = tempCtrl.value.duration;
-          await tempCtrl.dispose();
-        } catch (_) {}
+
+        Duration? detectedDuration = await FFmpegRenderService.probeVideoDuration(file);
+        if (detectedDuration == null || detectedDuration.inMilliseconds <= 0) {
+          try {
+            final tempCtrl = VideoPlayerController.file(file);
+            await tempCtrl.initialize();
+            detectedDuration = tempCtrl.value.duration;
+            await tempCtrl.dispose();
+          } catch (_) {}
+        }
+
+        final finalDur = (detectedDuration != null && detectedDuration.inSeconds > 0)
+            ? detectedDuration
+            : const Duration(seconds: 45);
 
         setState(() {
           _pickedGalleryVideo = file;
-          _galleryVideoName = video.name.isNotEmpty ? video.name : file.path.split(Platform.pathSeparator).last;
+          _galleryVideoName = video.name.isNotEmpty
+              ? video.name
+              : file.path.split(Platform.pathSeparator).last;
           _galleryVideoSize = size;
-          _pickedGalleryDuration = detectedDuration;
+          _pickedGalleryDuration = finalDur;
+
+          // Auto-adjust manual clip range so it fits within the picked gallery video
+          if (_manualClips.isNotEmpty) {
+            _manualClips.first.startCtrl.text = '00:00';
+            final clipEndSec = finalDur.inSeconds.clamp(1, 60);
+            _manualClips.first.endCtrl.text = _formatMMSS(Duration(seconds: clipEndSec));
+          }
         });
       }
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Gagal memilih video dari galeri: $e')),
       );
@@ -227,29 +274,38 @@ class _HomeScreenState extends State<HomeScreen> {
       File videoFile;
       VideoMetaData meta;
       List<SubtitleLine> captions = [];
+      final settings = await StorageService.loadSettings();
 
       if (_sourceType == VideoSourceType.youtube) {
         final url = _urlCtrl.text.trim();
         meta = await _ytService.getVideoDetails(url);
 
         setState(() => _processStatus = 'Mengambil transkrip / subtitle...');
-        captions = await _ytService.fetchYouTubeCaptions(meta.id);
+        captions = await _ytService.fetchYouTubeCaptions(
+          meta.id,
+          preferredLanguage: _selectedLanguage,
+        );
 
         setState(() => _processStatus = 'Mengunduh video ke penyimpanan HP...');
-        videoFile = await _ytService.downloadVideoStream(
+        final rawFile = await _ytService.downloadVideoStream(
           meta.id,
           onProgress: (p) {
             if (mounted) setState(() => _downloadProgress = p);
           },
         );
+        videoFile = rawFile;
       } else {
-        // Video dari Galeri HP
         videoFile = _pickedGalleryVideo!;
+        final probedDur = await FFmpegRenderService.probeVideoDuration(videoFile);
+        final actualGalleryDur = (probedDur != null && probedDur.inMilliseconds > 500)
+            ? probedDur
+            : _pickedGalleryDuration;
+
         meta = VideoMetaData(
           id: 'gallery_${DateTime.now().millisecondsSinceEpoch}',
           title: _galleryVideoName ?? 'Video Galeri HP',
           author: 'Galeri HP',
-          duration: _pickedGalleryDuration,
+          duration: actualGalleryDur,
           thumbnailUrl: 'https://images.unsplash.com/photo-1574717024653-61fd2cf4d44d?w=400',
           description: 'Video diunggah dari galeri HP',
         );
@@ -262,7 +318,6 @@ class _HomeScreenState extends State<HomeScreen> {
       // ==========================================
       if (_clipMode == ClipModeType.autoAi) {
         setState(() => _processStatus = 'AI sedang mendeteksi $_clipCount momen klip viral...');
-        final settings = await StorageService.loadSettings();
         final clips = await AIService.analyzeAndDetectHighlights(
           videoTitle: meta.title,
           videoDuration: meta.duration,
@@ -291,11 +346,26 @@ class _HomeScreenState extends State<HomeScreen> {
         // ==========================================
         setState(() => _processStatus = 'Membuat klip by request...');
         final List<ClipSegment> customClips = [];
+        final totalDur = meta.duration;
 
         for (int i = 0; i < _manualClips.length; i++) {
           final item = _manualClips[i];
-          final start = item.startDuration!;
-          final end = item.endDuration!;
+          Duration start = item.startDuration!;
+          Duration end = item.endDuration!;
+
+          // Clamp start & end against actual video duration so short gallery videos don't go out of bounds
+          if (totalDur.inMilliseconds > 1000) {
+            if (start >= totalDur) {
+              start = Duration.zero;
+            }
+            if (end > totalDur) {
+              end = totalDur;
+            }
+            if (end <= start) {
+              start = Duration.zero;
+              end = totalDur;
+            }
+          }
 
           final clipSubs = captions.where((l) {
             return l.endTime > start && l.startTime < end;
@@ -303,7 +373,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
           customClips.add(ClipSegment(
             id: 'manual_clip_${i + 1}',
-            title: 'Klip Request #${i + 1} (${item.startCtrl.text} - ${item.endCtrl.text})',
+            title: 'Klip Request #${i + 1} (${_formatMMSS(start)} - ${_formatMMSS(end)})',
             hook: 'HIGHLIGHT VIRAL PILIHAN! ⚡',
             viralReason: 'Klip dipotong manual sesuai request menit Anda',
             viralityScore: 9.8,
@@ -388,7 +458,7 @@ class _HomeScreenState extends State<HomeScreen> {
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (context) => const SettingsScreen()),
-              );
+              ).then((_) => _loadInitialSettings());
             },
           ),
         ],
@@ -437,6 +507,47 @@ class _HomeScreenState extends State<HomeScreen> {
                 _buildYoutubeInputBox()
               else
                 _buildGalleryUploadBox(),
+
+              const SizedBox(height: 16),
+
+              // Bahasa Suara Video / Subtitle Selector
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF181824),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.white12),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: const [
+                        Icon(Icons.translate_rounded, color: Colors.amber, size: 16),
+                        SizedBox(width: 6),
+                        Text(
+                          'Bahasa Suara Video (Subtitle AI):',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        _buildLangChip('auto', '🌐 Auto (EN/ID)'),
+                        const SizedBox(width: 8),
+                        _buildLangChip('en', '🇬🇧 English'),
+                        const SizedBox(width: 8),
+                        _buildLangChip('id', '🇮🇩 Indonesia'),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
 
               const SizedBox(height: 24),
 
@@ -509,6 +620,37 @@ class _HomeScreenState extends State<HomeScreen> {
                 desc: 'Menggunakan engine FFmpeg langsung di Android tanpa perlu sewa server backend.',
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLangChip(String code, String label) {
+    final isSelected = _selectedLanguage == code;
+    return Expanded(
+      child: InkWell(
+        onTap: () => _updateLanguageSetting(code),
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: isSelected ? Colors.amber : const Color(0xFF1B1B26),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: isSelected ? Colors.amber : Colors.white24,
+              width: isSelected ? 1.5 : 1.0,
+            ),
+          ),
+          child: Center(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? Colors.black : Colors.white70,
+                fontWeight: FontWeight.bold,
+                fontSize: 11,
+              ),
+            ),
           ),
         ),
       ),

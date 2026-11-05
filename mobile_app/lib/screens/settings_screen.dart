@@ -16,6 +16,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late TextEditingController _cookiesCtrl;
   int _minSec = 30;
   int _maxSec = 60;
+  String _subtitleLang = 'auto';
   bool _isLoading = true;
 
   @override
@@ -32,6 +33,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _cookiesCtrl = TextEditingController(text: s.youtubeCookies);
     _minSec = s.minClipSeconds;
     _maxSec = s.maxClipSeconds;
+    _subtitleLang = s.subtitleLanguage;
     setState(() => _isLoading = false);
   }
 
@@ -43,6 +45,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       youtubeCookies: _cookiesCtrl.text.trim(),
       minClipSeconds: _minSec,
       maxClipSeconds: _maxSec,
+      subtitleLanguage: _subtitleLang,
     );
     await StorageService.saveSettings(s);
     if (mounted) {
@@ -214,6 +217,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const Divider(color: Colors.white24),
           const SizedBox(height: 12),
           const Text(
+            'Bahasa Default Subtitle AI',
+            style: TextStyle(color: Colors.amber, fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Pilih bahasa pengenalan suara untuk pembuatan subtitle otomatis (Whisper AI & YouTube Captions):',
+            style: TextStyle(color: Colors.white54, fontSize: 13),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              _buildSettingsLangBtn('auto', '🌐 Auto (EN/ID)'),
+              const SizedBox(width: 8),
+              _buildSettingsLangBtn('en', '🇬🇧 English'),
+              const SizedBox(width: 8),
+              _buildSettingsLangBtn('id', '🇮🇩 Indonesia'),
+            ],
+          ),
+          const SizedBox(height: 24),
+          const Divider(color: Colors.white24),
+          const SizedBox(height: 12),
+          const Text(
             'YouTube Cookies (Opsional)',
             style: TextStyle(color: Colors.amber, fontSize: 16, fontWeight: FontWeight.bold),
           ),
@@ -245,6 +270,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: const Text('SIMPAN PENGATURAN', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSettingsLangBtn(String code, String label) {
+    final isSelected = _subtitleLang == code;
+    return Expanded(
+      child: InkWell(
+        onTap: () => setState(() => _subtitleLang = code),
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: isSelected ? Colors.amber : const Color(0xFF232336),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: isSelected ? Colors.amber : Colors.white24,
+            ),
+          ),
+          child: Center(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? Colors.black : Colors.white70,
+                fontSize: 12,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

@@ -1,11 +1,14 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
+import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:sherpa_onnx/sherpa_onnx.dart' as sherpa;
 import '../models/clip_model.dart';
 import '../models/settings_model.dart';
+import 'ffmpeg_render_service.dart';
 
 class AIService {
   static Future<List<ClipSegment>> analyzeAndDetectHighlights({
@@ -46,12 +49,11 @@ class AIService {
     required AppSettings settings,
     int clipCount = 3,
   }) async {
-    // Compress caption text with timestamps
     final buffer = StringBuffer();
     for (int i = 0; i < captions.length; i++) {
       final c = captions[i];
       buffer.writeln('[${c.startTime.inSeconds}s]: ${c.text}');
-      if (buffer.length > 25000) break; // Token guard
+      if (buffer.length > 25000) break;
     }
 
     final prompt = '''
@@ -71,7 +73,7 @@ Respond ONLY with a valid JSON array matching this format (no markdown fences, j
   {
     "id": "clip_1",
     "title": "Short Catchy Clip Name",
-    "hook": "PUNCHY HOOK BANNER IN INDONESIAN (CAPS)",
+    "hook": "PUNCHY HOOK BANNER (CAPS)",
     "viralReason": "Why this moment hooks viewers and retains attention",
     "viralityScore": 9.8,
     "startSeconds": 45,
@@ -83,21 +85,23 @@ Respond ONLY with a valid JSON array matching this format (no markdown fences, j
     final baseUrl = settings.apiBaseUrl.trim().replaceAll(RegExp(r'/+$'), '');
     final endpoint = Uri.parse('$baseUrl/chat/completions');
 
-    final response = await http.post(
-      endpoint,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ${settings.apiKey.trim()}',
-      },
-      body: jsonEncode({
-        'model': settings.modelName.isNotEmpty ? settings.modelName : 'gpt-4o-mini',
-        'messages': [
-          {'role': 'system', 'content': 'You are an expert video clipper and AI viral strategist.'},
-          {'role': 'user', 'content': prompt},
-        ],
-        'temperature': 0.7,
-      }),
-    ).timeout(const Duration(seconds: 45));
+    final response = await http
+        .post(
+          endpoint,
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ${settings.apiKey.trim()}',
+          },
+          body: jsonEncode({
+            'model': settings.modelName.isNotEmpty ? settings.modelName : 'gpt-4o-mini',
+            'messages': [
+              {'role': 'system', 'content': 'You are an expert video clipper and AI viral strategist.'},
+              {'role': 'user', 'content': prompt},
+            ],
+            'temperature': 0.7,
+          }),
+        )
+        .timeout(const Duration(seconds: 45));
 
     if (response.statusCode != 200) {
       throw Exception('AI API Error: ${response.statusCode} - ${response.body}');
@@ -105,24 +109,26 @@ Respond ONLY with a valid JSON array matching this format (no markdown fences, j
 
     final data = jsonDecode(utf8.decode(response.bodyBytes));
     String content = data['choices'][0]['message']['content'];
-
-    // Clean potential markdown blocks
     content = content.replaceAll(RegExp(r'```json|```'), '').trim();
 
     final List<dynamic> jsonList = jsonDecode(content);
     final List<ClipSegment> clips = [];
+    final maxVideoSec = videoDuration.inSeconds > 0 ? videoDuration.inSeconds : 3600;
 
     for (int i = 0; i < jsonList.length; i++) {
       final item = jsonList[i];
-      final startSec = (item['startSeconds'] as num).toInt();
-      final endSec = (item['endSeconds'] as num).toInt();
+      int startSec = (item['startSeconds'] as num).toInt().clamp(0, maxVideoSec);
+      int endSec = (item['endSeconds'] as num).toInt().clamp(0, maxVideoSec);
+      if (endSec <= startSec) {
+        startSec = 0;
+        endSec = maxVideoSec.clamp(5, 60);
+      }
 
       final start = Duration(seconds: startSec);
       final end = Duration(seconds: endSec);
 
-      // Filter subtitles belonging to this range
       final clipSubs = captions.where((line) {
-        return line.startTime >= start && line.endTime <= end;
+        return line.endTime > start && line.startTime < end;
       }).toList();
 
       clips.add(ClipSegment(
@@ -153,8 +159,10 @@ Respond ONLY with a valid JSON array matching this format (no markdown fences, j
 
       final files = {
         'tiny-tokens.txt': 'https://huggingface.co/csukuangfj/sherpa-onnx-whisper-tiny/resolve/main/tiny-tokens.txt',
-        'tiny-encoder.int8.onnx': 'https://huggingface.co/csukuangfj/sherpa-onnx-whisper-tiny/resolve/main/tiny-encoder.int8.onnx',
-        'tiny-decoder.int8.onnx': 'https://huggingface.co/csukuangfj/sherpa-onnx-whisper-tiny/resolve/main/tiny-decoder.int8.onnx',
+        'tiny-encoder.int8.onnx':
+            'https://huggingface.co/csukuangfj/sherpa-onnx-whisper-tiny/resolve/main/tiny-encoder.int8.onnx',
+        'tiny-decoder.int8.onnx':
+            'https://huggingface.co/csukuangfj/sherpa-onnx-whisper-tiny/resolve/main/tiny-decoder.int8.onnx',
       };
 
       bool allExist = true;
@@ -196,7 +204,8 @@ Respond ONLY with a valid JSON array matching this format (no markdown fences, j
           if (totalBytes > 0) {
             final fileFraction = receivedBytes / totalBytes;
             final overall = (fileIdx + fileFraction) / files.length;
-            onProgress?.call('Mengunduh model AI: ${entry.key} (${(fileFraction * 100).toInt()}%)', overall);
+            onProgress?.call(
+                'Mengunduh model AI: ${entry.key} (${(fileFraction * 100).toInt()}%)', overall);
           }
         }
         await sink.flush();
@@ -210,11 +219,177 @@ Respond ONLY with a valid JSON array matching this format (no markdown fences, j
     }
   }
 
+  /// Checks if a transcribed phrase is a known Whisper silence/noise hallucination
+  static bool _isWhisperHallucination(String text) {
+    final lower = text
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^\w\s]'), '')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    if (lower.isEmpty) return true;
+
+    const hallucinations = {
+      'terima kasih',
+      'terima kasih terima kasih',
+      'terima kasih sudah menonton',
+      'terima kasih telah menonton',
+      'sampai jumpa',
+      'thank you',
+      'thank you thank you',
+      'thanks for watching',
+      'thank you for watching',
+      'subtitles by',
+      'amaraorg',
+      'copyright',
+      'music',
+      'applause',
+      'blank audio',
+      'you',
+      'bye',
+    };
+
+    if (hallucinations.contains(lower)) return true;
+
+    // Detect if the entire string is just "terima kasih" or "thank you" repeated
+    final withoutThanks = lower
+        .replaceAll('terima kasih', '')
+        .replaceAll('thank you', '')
+        .replaceAll('thanks for watching', '')
+        .trim();
+    if (withoutThanks.isEmpty) return true;
+
+    return false;
+  }
+
+  /// Splits audio samples into speech-aligned chunks (max ~12s each) so Whisper never hits its 30s limit
+  /// and each chunk has tight, accurate speech boundaries.
+  static List<Map<String, dynamic>> _segmentAudioSamples(
+    Float32List samples,
+    int sampleRate,
+  ) {
+    final List<Map<String, dynamic>> chunks = [];
+    if (samples.isEmpty || sampleRate <= 0) return chunks;
+
+    final int windowSize = (sampleRate * 0.1).round(); // 100ms frame
+    final int totalFrames = (samples.length / windowSize).ceil();
+    final List<double> frameRms = List<double>.filled(totalFrames, 0.0);
+
+    double maxRms = 0.0;
+    for (int f = 0; f < totalFrames; f++) {
+      final int start = f * windowSize;
+      final int end = math.min(start + windowSize, samples.length);
+      if (end <= start) continue;
+      double sumSq = 0.0;
+      for (int i = start; i < end; i++) {
+        final s = samples[i];
+        sumSq += s * s;
+      }
+      final rms = math.sqrt(sumSq / (end - start));
+      frameRms[f] = rms;
+      if (rms > maxRms) maxRms = rms;
+    }
+
+    // Dynamic silence threshold based on overall audio energy
+    final double silenceThreshold = math.max(0.004, maxRms * 0.08);
+    const int minChunkFrames = 45; // 4.5s minimum before looking for a pause
+    const int idealMaxFrames = 110; // 11.0s ideal split
+    const int hardMaxFrames = 140; // 14.0s hard split (well below Whisper's 30s limit)
+
+    int chunkStartFrame = 0;
+    while (chunkStartFrame < totalFrames) {
+      // Skip leading silence frames
+      while (chunkStartFrame < totalFrames && frameRms[chunkStartFrame] < silenceThreshold) {
+        chunkStartFrame++;
+      }
+      if (chunkStartFrame >= totalFrames) break;
+
+      // Include a tiny 100ms look-back so initial consonants aren't clipped
+      final int actualStartFrame = math.max(0, chunkStartFrame - 1);
+      int searchFrame = actualStartFrame + minChunkFrames;
+
+      if (searchFrame >= totalFrames) {
+        searchFrame = totalFrames;
+      } else {
+        // Look for a natural pause (2 consecutive quiet frames) between minChunkFrames and idealMaxFrames
+        int chosenEndFrame = -1;
+        final int limitFrame = math.min(totalFrames, actualStartFrame + hardMaxFrames);
+        for (int f = searchFrame; f < limitFrame; f++) {
+          final isQuiet = frameRms[f] < silenceThreshold &&
+              (f + 1 >= totalFrames || frameRms[f + 1] < silenceThreshold);
+          if (isQuiet) {
+            chosenEndFrame = f + 1;
+            break;
+          }
+          if (f >= actualStartFrame + idealMaxFrames && frameRms[f] < silenceThreshold * 1.6) {
+            chosenEndFrame = f + 1;
+            break;
+          }
+        }
+        searchFrame = chosenEndFrame != -1 ? chosenEndFrame : limitFrame;
+      }
+
+      // Trim trailing silence frames in this chunk
+      int actualEndFrame = searchFrame;
+      while (actualEndFrame > actualStartFrame + 5 &&
+          frameRms[actualEndFrame - 1] < silenceThreshold) {
+        actualEndFrame--;
+      }
+      actualEndFrame = math.min(totalFrames, actualEndFrame + 1);
+
+      final int startSample = actualStartFrame * windowSize;
+      final int endSample = math.min(samples.length, actualEndFrame * windowSize);
+
+      if (endSample - startSample >= (sampleRate * 0.35).round()) {
+        // Check average RMS of this chunk
+        double sumRms = 0.0;
+        int activeFrames = 0;
+        for (int f = actualStartFrame; f < actualEndFrame; f++) {
+          sumRms += frameRms[f];
+          if (frameRms[f] >= silenceThreshold) activeFrames++;
+        }
+        final avgRms = sumRms / math.max(1, actualEndFrame - actualStartFrame);
+
+        if (activeFrames >= 2 && avgRms >= silenceThreshold * 0.5) {
+          // Extract and peak-normalize chunk samples so quiet voices are clear to Whisper
+          final chunkLen = endSample - startSample;
+          final Float32List chunkSamples = Float32List(chunkLen);
+          double peak = 0.0;
+          for (int i = 0; i < chunkLen; i++) {
+            final v = samples[startSample + i];
+            chunkSamples[i] = v;
+            final absV = v.abs();
+            if (absV > peak) peak = absV;
+          }
+
+          if (peak > 0.005 && peak < 0.75) {
+            final double gain = (0.85 / peak).clamp(1.0, 8.0);
+            for (int i = 0; i < chunkLen; i++) {
+              chunkSamples[i] = (chunkSamples[i] * gain).clamp(-1.0, 1.0);
+            }
+          }
+
+          chunks.add({
+            'samples': chunkSamples,
+            'startSec': startSample / sampleRate,
+            'endSec': endSample / sampleRate,
+            'avgRms': avgRms,
+          });
+        }
+      }
+
+      chunkStartFrame = searchFrame;
+    }
+
+    return chunks;
+  }
+
   /// 🎙️ Menjalankan pengenal suara AI Sherpa-ONNX lokal 100% offline langsung dari file audio WAV
+  /// Mendukung Bahasa Inggris ('en'), Bahasa Indonesia ('id'), dan Auto-Detect ('').
   static Future<List<SubtitleLine>> _runSherpaOnnxTranscription({
     required File wavFile,
     required Duration clipStart,
     required Duration clipDuration,
+    String language = 'auto',
     Function(String status, double progress)? onProgress,
   }) async {
     try {
@@ -224,18 +399,31 @@ Respond ONLY with a valid JSON array matching this format (no markdown fences, j
       final decoderFile = File('${modelDir.path}/tiny-decoder.int8.onnx');
       final tokensFile = File('${modelDir.path}/tiny-tokens.txt');
 
-      if (!await encoderFile.exists() || !await decoderFile.exists() || !await tokensFile.exists()) {
+      if (!await encoderFile.exists() ||
+          !await decoderFile.exists() ||
+          !await tokensFile.exists()) {
         final ready = await ensureSherpaModelReady(onProgress: onProgress);
         if (!ready) return [];
       }
 
-      onProgress?.call('Memuat AI Speech Recognizer di memori...', 0.82);
+      onProgress?.call('Memuat AI Speech Recognizer (Multilingual EN/ID)...', 0.40);
       sherpa.initBindings();
+
+      // Determine Whisper language code: '' = Auto-detect language (English, Indonesian, etc.)
+      String whisperLang = '';
+      final cleanLang = language.toLowerCase().trim();
+      if (cleanLang == 'en' || cleanLang == 'english' || cleanLang == 'inggris') {
+        whisperLang = 'en';
+      } else if (cleanLang == 'id' || cleanLang == 'indonesia' || cleanLang == 'indonesian') {
+        whisperLang = 'id';
+      } else {
+        whisperLang = ''; // Multilingual auto-detect
+      }
 
       final whisper = sherpa.OfflineWhisperModelConfig(
         encoder: encoderFile.path,
         decoder: decoderFile.path,
-        language: 'id',
+        language: whisperLang,
         task: 'transcribe',
         enableTokenTimestamps: true,
         enableSegmentTimestamps: true,
@@ -254,93 +442,125 @@ Respond ONLY with a valid JSON array matching this format (no markdown fences, j
         model: modelConfig,
       ));
 
-      onProgress?.call('Mendekode ucapan suara video...', 0.90);
       final wave = sherpa.readWave(wavFile.path);
-      final stream = recognizer.createStream();
-      stream.acceptWaveform(samples: wave.samples, sampleRate: wave.sampleRate);
-      recognizer.decode(stream);
-      final result = recognizer.getResult(stream);
-      stream.free();
-      recognizer.free();
-
-      final rawText = result.text.trim();
-      if (rawText.isEmpty && result.tokens.isEmpty) {
+      if (wave.samples.isEmpty || wave.sampleRate <= 0) {
+        recognizer.free();
         return [];
       }
 
-      final List<SubtitleWord> detectedWords = [];
+      final chunks = _segmentAudioSamples(wave.samples, wave.sampleRate);
+      if (chunks.isEmpty) {
+        recognizer.free();
+        return [];
+      }
 
-      if (result.tokens.isNotEmpty && result.timestamps.isNotEmpty) {
-        String currentWord = '';
-        double wordStartSec = 0.0;
-        double wordEndSec = 0.0;
+      final List<SubtitleWord> allDetectedWords = [];
 
-        for (int i = 0; i < result.tokens.length; i++) {
-          final tok = result.tokens[i];
-          final ts = i < result.timestamps.length ? result.timestamps[i] : (wordStartSec + 0.25);
-          final isNewWord = tok.startsWith(' ') || tok.startsWith(' ') || currentWord.isEmpty;
+      for (int cIdx = 0; cIdx < chunks.length; cIdx++) {
+        final chunk = chunks[cIdx];
+        final Float32List chunkSamples = chunk['samples'] as Float32List;
+        final double chunkStartSec = chunk['startSec'] as double;
+        final double chunkEndSec = chunk['endSec'] as double;
+        final double chunkDurSec = math.max(0.4, chunkEndSec - chunkStartSec);
 
-          if (isNewWord && currentWord.isNotEmpty) {
-            final clean = currentWord.trim();
-            if (clean.isNotEmpty) {
-              final wStart = clipStart + Duration(milliseconds: (wordStartSec * 1000).round());
-              final wEnd = clipStart + Duration(milliseconds: (wordEndSec * 1000).round());
-              detectedWords.add(SubtitleWord(
-                word: clean,
-                startTime: wStart,
-                endTime: wEnd > wStart ? wEnd : wStart + const Duration(milliseconds: 320),
-              ));
-            }
-            currentWord = tok.replaceAll(RegExp(r'^[  ]'), '');
-            wordStartSec = ts;
-            wordEndSec = ts + 0.3;
-          } else {
-            currentWord += tok.replaceAll(RegExp(r'^[  ]'), '');
-            wordEndSec = ts + 0.3;
+        final progressVal = 0.45 + (0.50 * ((cIdx + 1) / chunks.length));
+        onProgress?.call(
+          'Mendekode suara segmen ${cIdx + 1}/${chunks.length}...',
+          progressVal,
+        );
+
+        final stream = recognizer.createStream();
+        stream.acceptWaveform(samples: chunkSamples, sampleRate: wave.sampleRate);
+        recognizer.decode(stream);
+        final result = recognizer.getResult(stream);
+        stream.free();
+
+        // Clean special tokens and annotations from decoded text
+        final cleanedText = result.text
+            .replaceAll(RegExp(r'<\|.*?\|>'), '')
+            .replaceAll(RegExp(r'\[.*?\]'), '')
+            .replaceAll(RegExp(r'\(.*?\)'), '')
+            .replaceAll(RegExp(r'\s+'), ' ')
+            .trim();
+
+        if (cleanedText.isEmpty || _isWhisperHallucination(cleanedText)) {
+          continue;
+        }
+
+        final wordsList = cleanedText
+            .split(RegExp(r'\s+'))
+            .where((w) => w.trim().isNotEmpty)
+            .toList();
+        if (wordsList.isEmpty) continue;
+
+        // Calculate natural syllable/character weights for accurate word timing within this speech chunk
+        final weights = wordsList.map((w) {
+          final len = w.replaceAll(RegExp(r'[^\w]'), '').length;
+          double weight = len <= 2 ? 1.0 : (len <= 5 ? 1.6 : (len <= 8 ? 2.2 : 2.8));
+          if (w.endsWith(',') || w.endsWith(';') || w.endsWith(':')) weight += 0.35;
+          if (w.endsWith('.') || w.endsWith('!') || w.endsWith('?')) weight += 0.55;
+          return weight;
+        }).toList();
+
+        final totalWeight = weights.fold<double>(0.0, (sum, w) => sum + w);
+        double accWeight = 0.0;
+
+        for (int w = 0; w < wordsList.length; w++) {
+          final startFrac = accWeight / totalWeight;
+          accWeight += weights[w];
+          final endFrac = accWeight / totalWeight;
+
+          final absStartMs =
+              clipStart.inMilliseconds + ((chunkStartSec + startFrac * chunkDurSec) * 1000).round();
+          final absEndMs =
+              clipStart.inMilliseconds + ((chunkStartSec + endFrac * chunkDurSec) * 1000).round();
+
+          allDetectedWords.add(SubtitleWord(
+            word: wordsList[w],
+            startTime: Duration(milliseconds: absStartMs),
+            endTime: Duration(milliseconds: math.max(absStartMs + 160, absEndMs)),
+          ));
+        }
+      }
+
+      recognizer.free();
+
+      if (allDetectedWords.isEmpty) return [];
+
+      // Group into punchy 3-4 word lines for Shorts/TikTok, breaking naturally at sentence ends or pauses
+      final List<SubtitleLine> lines = [];
+      List<SubtitleWord> currentLineWords = [];
+
+      for (int i = 0; i < allDetectedWords.length; i++) {
+        final w = allDetectedWords[i];
+        if (currentLineWords.isNotEmpty) {
+          final prev = currentLineWords.last;
+          final gapMs = (w.startTime - prev.endTime).inMilliseconds;
+          final endsPunctuation = RegExp(r'[\.\!\?\,\;]$').hasMatch(prev.word);
+
+          if (currentLineWords.length >= 4 ||
+              gapMs > 500 ||
+              (currentLineWords.length >= 3 && endsPunctuation)) {
+            lines.add(SubtitleLine(
+              text: currentLineWords.map((cw) => cw.word).join(' '),
+              startTime: currentLineWords.first.startTime,
+              endTime: currentLineWords.last.endTime,
+              transition: 'fade in',
+              words: List.from(currentLineWords),
+            ));
+            currentLineWords.clear();
           }
         }
-        if (currentWord.trim().isNotEmpty) {
-          final clean = currentWord.trim();
-          final wStart = clipStart + Duration(milliseconds: (wordStartSec * 1000).round());
-          final wEnd = clipStart + Duration(milliseconds: (wordEndSec * 1000).round());
-          detectedWords.add(SubtitleWord(
-            word: clean,
-            startTime: wStart,
-            endTime: wEnd > wStart ? wEnd : wStart + const Duration(milliseconds: 320),
-          ));
-        }
+        currentLineWords.add(w);
       }
 
-      // Fallback kata-per-kata jika token timestamps tidak tersedia
-      if (detectedWords.isEmpty && rawText.isNotEmpty) {
-        final wordsList = rawText.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
-        final totalClipMs = clipDuration.inMilliseconds > 500 ? clipDuration.inMilliseconds : 5000;
-        final perWordMs = wordsList.isNotEmpty ? (totalClipMs / wordsList.length).round() : totalClipMs;
-
-        for (int i = 0; i < wordsList.length; i++) {
-          final wStart = clipStart + Duration(milliseconds: i * perWordMs);
-          final wEnd = wStart + Duration(milliseconds: perWordMs);
-          detectedWords.add(SubtitleWord(
-            word: wordsList[i],
-            startTime: wStart,
-            endTime: wEnd,
-          ));
-        }
-      }
-
-      // Gabungkan menjadi 3-4 kata per baris subtitle khas Shorts/TikTok
-      final List<SubtitleLine> lines = [];
-      for (int i = 0; i < detectedWords.length; i += 4) {
-        final chunk = detectedWords.sublist(i, (i + 4).clamp(0, detectedWords.length));
-        final lineText = chunk.map((w) => w.word).join(' ');
-        final lStart = chunk.first.startTime;
-        final lEnd = chunk.last.endTime;
+      if (currentLineWords.isNotEmpty) {
         lines.add(SubtitleLine(
-          text: lineText,
-          startTime: lStart,
-          endTime: lEnd > lStart ? lEnd : lStart + const Duration(milliseconds: 1400),
+          text: currentLineWords.map((cw) => cw.word).join(' '),
+          startTime: currentLineWords.first.startTime,
+          endTime: currentLineWords.last.endTime,
           transition: 'fade in',
-          words: chunk,
+          words: List.from(currentLineWords),
         ));
       }
 
@@ -378,7 +598,8 @@ Respond ONLY with a valid JSON array matching this format (no markdown fences, j
   static List<SubtitleLine> _parseSrtContent(String content, Duration baseOffset) {
     final List<SubtitleLine> list = [];
     final blocks = content.split(RegExp(r'\r?\n\r?\n'));
-    final timeRegex = RegExp(r'(\d{2}):(\d{2}):(\d{2})[,.](\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2})[,.](\d{3})');
+    final timeRegex = RegExp(
+        r'(\d{2}):(\d{2}):(\d{2})[,.](\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2})[,.](\d{3})');
 
     for (var b in blocks) {
       final lines = b.trim().split(RegExp(r'\r?\n'));
@@ -401,18 +622,21 @@ Respond ONLY with a valid JSON array matching this format (no markdown fences, j
           final sM = int.parse(match.group(2)!);
           final sS = int.parse(match.group(3)!);
           final sMs = int.parse(match.group(4)!);
-          final start = baseOffset + Duration(hours: sH, minutes: sM, seconds: sS, milliseconds: sMs);
+          final start =
+              baseOffset + Duration(hours: sH, minutes: sM, seconds: sS, milliseconds: sMs);
 
           final eH = int.parse(match.group(5)!);
           final eM = int.parse(match.group(6)!);
           final eS = int.parse(match.group(7)!);
           final eMs = int.parse(match.group(8)!);
-          final end = baseOffset + Duration(hours: eH, minutes: eM, seconds: eS, milliseconds: eMs);
+          final end =
+              baseOffset + Duration(hours: eH, minutes: eM, seconds: eS, milliseconds: eMs);
 
           final lineText = textLines.join(' ');
           final words = lineText.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
           final dur = end - start;
-          final perWordMs = words.isNotEmpty ? (dur.inMilliseconds / words.length).round() : dur.inMilliseconds;
+          final perWordMs =
+              words.isNotEmpty ? (dur.inMilliseconds / words.length).round() : dur.inMilliseconds;
 
           final wordItems = <SubtitleWord>[];
           for (int w = 0; w < words.length; w++) {
@@ -459,8 +683,10 @@ Respond ONLY with a valid JSON array matching this format (no markdown fences, j
         final silenceStartMatches = RegExp(r'silence_start:\s*([0-9\.]+)').allMatches(logs);
         final silenceEndMatches = RegExp(r'silence_end:\s*([0-9\.]+)').allMatches(logs);
 
-        final List<double> silStarts = silenceStartMatches.map((m) => double.tryParse(m.group(1) ?? '') ?? 0.0).toList();
-        final List<double> silEnds = silenceEndMatches.map((m) => double.tryParse(m.group(1) ?? '') ?? 0.0).toList();
+        final List<double> silStarts =
+            silenceStartMatches.map((m) => double.tryParse(m.group(1) ?? '') ?? 0.0).toList();
+        final List<double> silEnds =
+            silenceEndMatches.map((m) => double.tryParse(m.group(1) ?? '') ?? 0.0).toList();
 
         double curSpeechStart = 0.0;
         final totalClipSec = clipDuration.inMilliseconds / 1000.0;
@@ -492,7 +718,7 @@ Respond ONLY with a valid JSON array matching this format (no markdown fences, j
     }
 
     final wordsPool = scriptText
-        .replaceAll(RegExp(r'[^\w\s\-\.\,\!\?]'), '')
+        .replaceAll(RegExp(r'[^\w\s\-\.\,\!\?\x27]'), '')
         .split(RegExp(r'\s+'))
         .where((w) => w.isNotEmpty)
         .toList();
@@ -503,20 +729,22 @@ Respond ONLY with a valid JSON array matching this format (no markdown fences, j
     int wordPointer = 0;
 
     for (int i = 0; i < speechIntervals.length; i++) {
+      if (wordPointer >= wordsPool.length) break;
       final interval = speechIntervals[i];
       final intervalStartSec = interval['start']!;
       final intervalEndSec = interval['end']!;
       final intervalDurSec = intervalEndSec - intervalStartSec;
 
-      if (intervalDurSec < 0.4) continue;
+      if (intervalDurSec < 0.35) continue;
 
       final chunkWordCount = intervalDurSec > 2.5 ? 5 : (intervalDurSec > 1.4 ? 4 : 3);
       final List<String> currentChunkWords = [];
 
-      for (int k = 0; k < chunkWordCount; k++) {
-        currentChunkWords.add(wordsPool[wordPointer % wordsPool.length]);
+      for (int k = 0; k < chunkWordCount && wordPointer < wordsPool.length; k++) {
+        currentChunkWords.add(wordsPool[wordPointer]);
         wordPointer++;
       }
+      if (currentChunkWords.isEmpty) continue;
 
       final syllableWeights = currentChunkWords.map((w) {
         final len = w.length;
@@ -564,37 +792,66 @@ Respond ONLY with a valid JSON array matching this format (no markdown fences, j
     required File videoFile,
     required Duration clipStart,
     required Duration clipDuration,
+    String language = 'auto',
     Function(String status, double progress)? onProgress,
     String? customScriptText,
     String? videoTitle,
   }) async {
+    // Jika pengguna menyediakan naskah manual, langsung selaraskan dengan VAD
+    if (customScriptText != null && customScriptText.trim().isNotEmpty) {
+      onProgress?.call('Menyelaraskan naskah dengan suara video...', 0.35);
+      return _alignScriptWithAudioVAD(
+        videoFile: videoFile,
+        clipStart: clipStart,
+        clipDuration: clipDuration,
+        scriptText: customScriptText,
+      );
+    }
+
+    // Pastikan clipStart dan clipDuration valid terhadap durasi asli file video
+    Duration effectiveStart = clipStart;
+    Duration effectiveDuration = clipDuration;
+    final actualDur = await FFmpegRenderService.probeVideoDuration(videoFile);
+    if (actualDur != null && actualDur.inMilliseconds > 500) {
+      if (effectiveStart >= actualDur) {
+        effectiveStart = Duration.zero;
+      }
+      if (effectiveStart + effectiveDuration > actualDur) {
+        effectiveDuration = actualDur - effectiveStart;
+      }
+    }
+    if (effectiveDuration.inMilliseconds < 500) {
+      effectiveDuration = actualDur ?? const Duration(seconds: 15);
+    }
+
     // 1. Cek apakah video sudah memiliki subtitle internal
     onProgress?.call('Memeriksa subtitle internal video...', 0.05);
     final embedded = await _extractEmbeddedSubtitles(
       videoFile: videoFile,
-      clipStart: clipStart,
-      clipDuration: clipDuration,
+      clipStart: effectiveStart,
+      clipDuration: effectiveDuration,
     );
     if (embedded.isNotEmpty) return embedded;
 
-    // 2. Ekstrak audio potongan klip ke format 16kHz mono WAV untuk ASR
-    onProgress?.call('Mengekstrak audio suara video...', 0.15);
+    // 2. Ekstrak audio potongan klip ke format 16kHz mono WAV dengan voice bandpass filter
+    onProgress?.call('Mengekstrak & menjernihkan audio suara video...', 0.15);
     final tempDir = await getTemporaryDirectory();
     final wavFile = File('${tempDir.path}/local_asr_${DateTime.now().millisecondsSinceEpoch}.wav');
-    final startSec = (clipStart.inMilliseconds / 1000.0).toStringAsFixed(2);
-    final durSec = (clipDuration.inMilliseconds / 1000.0).toStringAsFixed(2);
+    final startSec = (effectiveStart.inMilliseconds / 1000.0).toStringAsFixed(2);
+    final durSec = (effectiveDuration.inMilliseconds / 1000.0).toStringAsFixed(2);
 
     try {
+      // Gunakan -i sebelum -ss atau akurat dengan filter highpass/lowpass/dynaudnorm agar suara jernih
       final extractCmd =
-          '-y -ss $startSec -t $durSec -i "${videoFile.path}" -vn -acodec pcm_s16le -ar 16000 -ac 1 "${wavFile.path}"';
+          '-y -i "${videoFile.path}" -ss $startSec -t $durSec -vn -af "highpass=f=80,lowpass=f=7600,dynaudnorm=f=150:g=15" -acodec pcm_s16le -ar 16000 -ac 1 "${wavFile.path}"';
       await FFmpegKit.execute(extractCmd);
 
       if (await wavFile.exists() && await wavFile.length() > 500) {
-        // Jalankan pengenal suara AI Sherpa-ONNX lokal 100% offline
         final asrLines = await _runSherpaOnnxTranscription(
           wavFile: wavFile,
-          clipStart: clipStart,
-          clipDuration: clipDuration,
+          clipStart: effectiveStart,
+          clipDuration: effectiveDuration,
+          language: language,
           onProgress: onProgress,
         );
         if (asrLines.isNotEmpty) return asrLines;
@@ -609,50 +866,76 @@ Respond ONLY with a valid JSON array matching this format (no markdown fences, j
       }
     }
 
-    // 3. Jika pengguna menyediakan naskah manual, selaraskan dengan VAD
-    if (customScriptText != null && customScriptText.trim().isNotEmpty) {
-      return _alignScriptWithAudioVAD(
-        videoFile: videoFile,
-        clipStart: clipStart,
-        clipDuration: clipDuration,
-        scriptText: customScriptText,
-      );
-    }
-
     return [];
   }
 
-  /// Transcribes video audio: Mencoba Whisper jika API Key ada, atau langsung menggunakan Local AI Audio Transcriber
+  /// Transcribes video audio: Mencoba Whisper Cloud jika API Key ada, atau langsung menggunakan Local AI Audio Transcriber
   static Future<List<SubtitleLine>> transcribeVideoAudio({
     required File videoFile,
     required Duration clipStart,
     required Duration clipDuration,
     required AppSettings settings,
+    String? languageOverride,
     Function(String status, double progress)? onProgress,
     String? customScriptText,
     String? videoTitle,
   }) async {
+    final effectiveLang = (languageOverride ?? settings.subtitleLanguage).toLowerCase().trim();
+
+    if (customScriptText != null && customScriptText.trim().isNotEmpty) {
+      return transcribeVideoAudioLocally(
+        videoFile: videoFile,
+        clipStart: clipStart,
+        clipDuration: clipDuration,
+        language: effectiveLang,
+        onProgress: onProgress,
+        customScriptText: customScriptText,
+        videoTitle: videoTitle,
+      );
+    }
+
+    // Clamp clipStart & clipDuration against actual file duration
+    Duration effectiveStart = clipStart;
+    Duration effectiveDuration = clipDuration;
+    final actualDur = await FFmpegRenderService.probeVideoDuration(videoFile);
+    if (actualDur != null && actualDur.inMilliseconds > 500) {
+      if (effectiveStart >= actualDur) {
+        effectiveStart = Duration.zero;
+      }
+      if (effectiveStart + effectiveDuration > actualDur) {
+        effectiveDuration = actualDur - effectiveStart;
+      }
+    }
+
     // 1. Jika ada API Key Whisper, coba panggil Whisper API terlebih dahulu
     if (settings.apiKey.trim().isNotEmpty) {
       final tempDir = await getTemporaryDirectory();
-      final audioFile = File('${tempDir.path}/whisper_clip_${DateTime.now().millisecondsSinceEpoch}.mp3');
-      final startSec = (clipStart.inMilliseconds / 1000.0).toStringAsFixed(2);
-      final durSec = (clipDuration.inMilliseconds / 1000.0).toStringAsFixed(2);
+      final audioFile =
+          File('${tempDir.path}/whisper_clip_${DateTime.now().millisecondsSinceEpoch}.mp3');
+      final startSec = (effectiveStart.inMilliseconds / 1000.0).toStringAsFixed(2);
+      final durSec = (effectiveDuration.inMilliseconds / 1000.0).toStringAsFixed(2);
 
       try {
+        onProgress?.call('Mengekstrak audio untuk Cloud Whisper AI...', 0.15);
         final extractCmd =
-            '-y -ss $startSec -t $durSec -i "${videoFile.path}" -vn -acodec libmp3lame -ar 16000 -ac 1 -b:a 64k "${audioFile.path}"';
+            '-y -i "${videoFile.path}" -ss $startSec -t $durSec -vn -acodec libmp3lame -ar 16000 -ac 1 -b:a 64k "${audioFile.path}"';
         await FFmpegKit.execute(extractCmd);
 
         if (await audioFile.exists() && await audioFile.length() > 1000) {
+          onProgress?.call('Mentranskripsi suara dengan Whisper AI...', 0.50);
           final baseUrl = settings.apiBaseUrl.trim().replaceAll(RegExp(r'/+$'), '');
           final uri = Uri.parse('$baseUrl/audio/transcriptions');
 
           final request = http.MultipartRequest('POST', uri);
           request.headers['Authorization'] = 'Bearer ${settings.apiKey.trim()}';
-          request.fields['model'] = baseUrl.contains('groq') ? 'whisper-large-v3-turbo' : 'whisper-1';
+          request.fields['model'] =
+              baseUrl.contains('groq') ? 'whisper-large-v3-turbo' : 'whisper-1';
           request.fields['response_format'] = 'verbose_json';
           request.fields['timestamp_granularities[]'] = 'word';
+          request.fields['timestamp_granularities[]'] = 'segment';
+          if (effectiveLang == 'en' || effectiveLang == 'id') {
+            request.fields['language'] = effectiveLang;
+          }
           request.files.add(await http.MultipartFile.fromPath('file', audioFile.path));
 
           final streamed = await request.send().timeout(const Duration(seconds: 45));
@@ -661,6 +944,7 @@ Respond ONLY with a valid JSON array matching this format (no markdown fences, j
           if (resp.statusCode == 200) {
             final data = jsonDecode(utf8.decode(resp.bodyBytes));
             final List<dynamic> wordsJson = data['words'] ?? [];
+            final List<dynamic> segmentsJson = data['segments'] ?? [];
 
             if (wordsJson.isNotEmpty) {
               final List<SubtitleLine> lines = [];
@@ -675,8 +959,9 @@ Respond ONLY with a valid JSON array matching this format (no markdown fences, j
                 final startMs = ((w['start'] as num).toDouble() * 1000).round();
                 final endMs = ((w['end'] as num).toDouble() * 1000).round();
 
-                final absWordStart = clipStart + Duration(milliseconds: startMs);
-                final absWordEnd = clipStart + Duration(milliseconds: endMs > startMs ? endMs : startMs + 300);
+                final absWordStart = effectiveStart + Duration(milliseconds: startMs);
+                final absWordEnd = effectiveStart +
+                    Duration(milliseconds: endMs > startMs ? endMs : startMs + 300);
 
                 lineStart ??= absWordStart;
                 currentWords.add(SubtitleWord(
@@ -711,11 +996,44 @@ Respond ONLY with a valid JSON array matching this format (no markdown fences, j
               }
 
               if (lines.isNotEmpty) return lines;
+            } else if (segmentsJson.isNotEmpty) {
+              final List<SubtitleWord> segWords = [];
+              for (var seg in segmentsJson) {
+                final segText = (seg['text'] ?? '').toString().trim();
+                if (segText.isEmpty || _isWhisperHallucination(segText)) continue;
+                final sMs = (((seg['start'] as num?)?.toDouble() ?? 0.0) * 1000).round();
+                final eMs = (((seg['end'] as num?)?.toDouble() ?? (sMs / 1000.0 + 1.5)) * 1000).round();
+                final wList = segText.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+                if (wList.isEmpty) continue;
+                final durMs = math.max(300, eMs - sMs);
+                final perW = (durMs / wList.length).round();
+                for (int i = 0; i < wList.length; i++) {
+                  final ws = effectiveStart + Duration(milliseconds: sMs + i * perW);
+                  final we = (i == wList.length - 1)
+                      ? effectiveStart + Duration(milliseconds: sMs + durMs)
+                      : ws + Duration(milliseconds: perW);
+                  segWords.add(SubtitleWord(word: wList[i], startTime: ws, endTime: we));
+                }
+              }
+              if (segWords.isNotEmpty) {
+                final List<SubtitleLine> lines = [];
+                for (int i = 0; i < segWords.length; i += 4) {
+                  final chunk = segWords.sublist(i, math.min(i + 4, segWords.length));
+                  lines.add(SubtitleLine(
+                    text: chunk.map((w) => w.word).join(' '),
+                    startTime: chunk.first.startTime,
+                    endTime: chunk.last.endTime,
+                    transition: 'fade in',
+                    words: chunk,
+                  ));
+                }
+                return lines;
+              }
             }
           }
         }
       } catch (_) {
-        // Abaikan dan lanjut ke Local AI Speech Engine
+        // Lanjut ke Local AI Speech Engine
       } finally {
         if (await audioFile.exists()) {
           try {
@@ -725,11 +1043,12 @@ Respond ONLY with a valid JSON array matching this format (no markdown fences, j
       }
     }
 
-    // 2. Jika tanpa API Key atau offline, jalankan Local AI Audio Speech Transcriber bawaan aplikasi
+    // 2. Jalankan Local AI Audio Speech Transcriber bawaan aplikasi (Multilingual EN/ID)
     return transcribeVideoAudioLocally(
       videoFile: videoFile,
-      clipStart: clipStart,
-      clipDuration: clipDuration,
+      clipStart: effectiveStart,
+      clipDuration: effectiveDuration,
+      language: effectiveLang,
       onProgress: onProgress,
       customScriptText: customScriptText,
       videoTitle: videoTitle,
@@ -747,8 +1066,8 @@ Respond ONLY with a valid JSON array matching this format (no markdown fences, j
     final List<ClipSegment> clips = [];
     final totalSec = videoDuration.inSeconds;
 
-    if (totalSec < 35) {
-      // Video pendek, ambil seluruh durasi sebagai 1 klip utuh
+    if (totalSec <= 40) {
+      final safeEnd = totalSec > 0 ? videoDuration : const Duration(seconds: 30);
       clips.add(ClipSegment(
         id: 'clip_1',
         title: videoTitle.isNotEmpty ? videoTitle : 'Highlight Utama Video',
@@ -756,34 +1075,33 @@ Respond ONLY with a valid JSON array matching this format (no markdown fences, j
         viralReason: 'Klip padat dengan hook langsung ke inti pembahasan',
         viralityScore: 9.8,
         startTime: Duration.zero,
-        endTime: videoDuration,
+        endTime: safeEnd,
         subtitles: captions,
       ));
       return clips;
     }
 
-    // Daftar kata kunci emosi & pemicu viralitas tinggi (Viral Trigger Keywords)
     final viralKeywords = {
       'rahasia', 'kenapa', 'ternyata', 'fakta', 'gila', 'bahaya', 'penting', 'tips',
       'trik', 'bukti', 'kaget', 'viral', 'hebat', 'parah', 'beneran', 'masalah',
       'solusi', 'cara', 'kunci', 'shock', 'secret', 'why', 'truth', 'mistake',
       'crazy', 'warning', 'wow', 'kocak', 'lucu', 'jodoh', 'trend', 'strategi',
-      'sukses', 'rugi', 'untung', 'uang', 'kaya', 'stop', 'jangan'
+      'sukses', 'rugi', 'untung', 'uang', 'kaya', 'stop', 'jangan', 'how', 'best',
+      'never', 'always', 'money', 'life', 'change', 'fact', 'hack'
     };
 
-    // 1. Jika ada captions, lakukan analisis densitas kata kunci viral untuk mencari momen terbaik
     if (captions.isNotEmpty) {
-      // Scoring jendela waktu setiap 35-50 detik
       final List<Map<String, dynamic>> candidateWindows = [];
-      final windowStepSec = 15;
+      const windowStepSec = 15;
       final targetDurations = [34, 48, 29, 42, 53, 38];
 
-      for (int sec = 5; sec < totalSec - 25; sec += windowStepSec) {
+      for (int sec = 0; sec < totalSec - 20; sec += windowStepSec) {
         final dur = targetDurations[(sec ~/ windowStepSec) % targetDurations.length];
         final wStart = Duration(seconds: sec);
         final wEnd = Duration(seconds: (sec + dur).clamp(0, totalSec));
 
-        final windowSubs = captions.where((l) => l.startTime >= wStart && l.endTime <= wEnd).toList();
+        final windowSubs =
+            captions.where((l) => l.endTime > wStart && l.startTime < wEnd).toList();
         if (windowSubs.isEmpty) continue;
 
         int score = 0;
@@ -800,7 +1118,7 @@ Respond ONLY with a valid JSON array matching this format (no markdown fences, j
         candidateWindows.add({
           'start': wStart,
           'end': wEnd,
-          'score': score + (windowSubs.length * 2), // Semakin banyak dialog aktif semakin seru
+          'score': score + (windowSubs.length * 2),
           'subs': windowSubs,
         });
       }
@@ -812,7 +1130,6 @@ Respond ONLY with a valid JSON array matching this format (no markdown fences, j
         final cStart = cand['start'] as Duration;
         final cEnd = cand['end'] as Duration;
 
-        // Hindari overlap antar klip
         bool overlaps = selectedWindows.any((sel) {
           final sStart = sel['start'] as Duration;
           final sEnd = sel['end'] as Duration;
@@ -855,8 +1172,6 @@ Respond ONLY with a valid JSON array matching this format (no markdown fences, j
       }
     }
 
-    // 2. Mode Heuristik Dinamis Tanpa Captions: Variasi durasi alami & posisi golden narrative
-    // DURASI BERAGAM: bukan lagi 45 detik kaku, melainkan durasi dinamis Shorts (28s, 44s, 35s, 52s)
     final dynamicDurations = [32, 48, 28, 42, 54, 36];
     final titles = [
       'Hook Terpanas: Pembukaan Penting',
@@ -880,11 +1195,10 @@ Respond ONLY with a valid JSON array matching this format (no markdown fences, j
       'Ringkasan emas yang memicu aksi penonton dan virality score maksimal',
     ];
 
-    // Posisi golden narrative (12% awal hook, 38% klimaks cerita, 65% argumen terpanas, 85% kesimpulan)
-    final narrativeRatios = [0.12, 0.38, 0.65, 0.85, 0.50, 0.25];
+    final narrativeRatios = [0.0, 0.35, 0.65, 0.85, 0.50, 0.20];
 
     for (int i = 0; i < clipCount; i++) {
-      final durSec = dynamicDurations[i % dynamicDurations.length];
+      final durSec = math.min(dynamicDurations[i % dynamicDurations.length], totalSec);
       final ratio = narrativeRatios[i % narrativeRatios.length];
 
       int s = (totalSec * ratio).round();
@@ -892,12 +1206,16 @@ Respond ONLY with a valid JSON array matching this format (no markdown fences, j
         s = (totalSec - durSec).clamp(0, totalSec);
       }
       int e = (s + durSec).clamp(0, totalSec);
+      if (e <= s) {
+        s = 0;
+        e = totalSec;
+      }
 
       final start = Duration(seconds: s);
       final end = Duration(seconds: e);
 
       final clipSubs = captions.where((line) {
-        return line.startTime >= start && line.endTime <= end;
+        return line.endTime > start && line.startTime < end;
       }).toList();
 
       final score = (9.8 - (i * 0.25)).clamp(8.0, 9.9);
